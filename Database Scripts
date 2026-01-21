@@ -1,0 +1,91 @@
+Database Scripts
+
+MySQl
+-- 1. Create the Database
+CREATE DATABASE logigraph_db;
+USE logigraph_db;
+
+-- 2. Warehouses Table (Nodes for DSA)
+CREATE TABLE warehouses (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    latitude DECIMAL(10, 8) NOT NULL,
+    longitude DECIMAL(11, 8) NOT NULL,
+    capacity INT DEFAULT 10
+);
+
+-- 3. Vehicles Table (The Assets)
+CREATE TABLE vehicles (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    plate_number VARCHAR(20) UNIQUE NOT NULL,
+    status ENUM('IDLE', 'LOADING', 'IN_TRANSIT', 'MAINTENANCE') DEFAULT 'IDLE',
+    current_warehouse_id INT,
+    FOREIGN KEY (current_warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL
+);
+
+-- 4. Routes Table (Edges for DSA)
+CREATE TABLE routes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    source_warehouse_id INT NOT NULL,
+    destination_warehouse_id INT NOT NULL,
+    distance_km DECIMAL(10, 2) NOT NULL,
+    base_time_mins INT NOT NULL,
+    road_name VARCHAR(100),
+    FOREIGN KEY (source_warehouse_id) REFERENCES warehouses(id),
+    FOREIGN KEY (destination_warehouse_id) REFERENCES warehouses(id)
+);
+
+-- 5. Customers Table
+CREATE TABLE customers (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    phone VARCHAR(15)
+);
+
+-- 6. Orders Table (Business Logic)
+CREATE TABLE orders (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    tracking_id VARCHAR(50) UNIQUE NOT NULL,
+    customer_id INT,
+    assigned_vehicle_id INT,
+    status VARCHAR(20) DEFAULT 'PLACED',
+    destination_lat DECIMAL(10, 8),
+    destination_lng DECIMAL(11, 8),
+    FOREIGN KEY (customer_id) REFERENCES customers(id),
+    FOREIGN KEY (assigned_vehicle_id) REFERENCES vehicles(id)
+);
+
+
+MongoDb
+
+// Switch to your project database
+use logigraph_tracking;
+
+// 1. Create Collection for Live GPS Tracking
+db.createCollection("vehicle_telemetry");
+
+// Create a 2dsphere index so you can do Google Maps proximity searches
+db.vehicle_telemetry.createIndex({ location: "2dsphere" });
+
+// 2. Create Collection for Dynamic Traffic Data
+db.createCollection("route_conditions");
+
+// 3. Create Collection for System Alerts
+db.createCollection("system_alerts");
+
+
+Testing Data
+-- Insert Real-World Industrial Hubs
+INSERT INTO warehouses (name, latitude, longitude) VALUES 
+('Waluj ICD (Aurangabad)', 19.8458, 75.2215),
+('Wagholi Logistics (Pune)', 18.5793, 73.9830),
+('Masjid Bandar Port (Mumbai)', 18.9482, 72.8422);
+
+-- Insert a Test Vehicle
+INSERT INTO vehicles (plate_number, status, current_warehouse_id) VALUES 
+('MH-20-DE-4040', 'IDLE', 1);
+
+-- Insert a Test Route
+INSERT INTO routes (source_warehouse_id, destination_warehouse_id, distance_km, base_time_mins, road_name) VALUES 
+(1, 2, 235.0, 300, 'Aurangabad-Pune Hwy');
