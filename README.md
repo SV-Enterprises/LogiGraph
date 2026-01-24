@@ -1,6 +1,8 @@
 # LogiGraph
 Repo For Logigraph Project
-Testing Mandar Hadap mhadap5@gmail.com
+Mandar Hadap mandar.hadap5@gmail.com
+Testing 
+Mandar Hadap mhadap5@gmail.com
 
 yo guys - Naman this side ...
 
