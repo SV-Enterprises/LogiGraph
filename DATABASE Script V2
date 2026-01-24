@@ -1,0 +1,121 @@
+-- 1. Setup
+CREATE DATABASE logigraph_db;
+USE logigraph_db;
+
+-- 2. Warehouses (The Nodes)
+CREATE TABLE warehouses (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    latitude DECIMAL(10, 8) NOT NULL,
+    longitude DECIMAL(11, 8) NOT NULL,
+    address TEXT
+);
+
+-- 3. Products & Inventory (The Catalog & Stock)
+CREATE TABLE products (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    sku VARCHAR(50) UNIQUE NOT NULL,
+    unit_price DECIMAL(10, 2)
+);
+
+CREATE TABLE warehouse_inventory (
+    warehouse_id INT,
+    product_id INT,
+    quantity INT DEFAULT 0,
+    PRIMARY KEY (warehouse_id, product_id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id),
+    FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+-- 4. Routes (The Edges)
+CREATE TABLE routes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    source_warehouse_id INT NOT NULL,
+    destination_warehouse_id INT NOT NULL,
+    distance_km DECIMAL(10, 2) NOT NULL,
+    base_time_mins INT NOT NULL,
+    FOREIGN KEY (source_warehouse_id) REFERENCES warehouses(id),
+    FOREIGN KEY (destination_warehouse_id) REFERENCES warehouses(id)
+);
+
+-- 5. Vehicles (The Assets)
+CREATE TABLE vehicles (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    plate_number VARCHAR(20) UNIQUE NOT NULL,
+    type VARCHAR(50), -- e.g., 'Heavy Truck', 'EV Van'
+    status VARCHAR(20) DEFAULT 'IDLE', -- IDLE, IN_TRANSIT, LOADING
+    current_warehouse_id INT,
+    FOREIGN KEY (current_warehouse_id) REFERENCES warehouses(id)
+);
+
+-- 6. Users & Customers (The People)
+CREATE TABLE users (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL -- 'ADMIN', 'MANAGER', 'CUSTOMER'
+);
+
+CREATE TABLE customers (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT,
+    full_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(15),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 7. Orders & Order Items (The Transactions)
+CREATE TABLE orders (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    tracking_id VARCHAR(50) UNIQUE NOT NULL,
+    customer_id INT,
+    assigned_vehicle_id INT,
+    status VARCHAR(20) DEFAULT 'PLACED',
+    dest_lat DECIMAL(10, 8),
+    dest_lng DECIMAL(11, 8),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(id),
+    FOREIGN KEY (assigned_vehicle_id) REFERENCES vehicles(id)
+);
+
+CREATE TABLE order_items (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    order_id INT,
+    product_id INT,
+    quantity INT,
+    FOREIGN KEY (order_id) REFERENCES orders(id),
+    FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+NoSQL - MongoDB
+
+// Switch to your tracking database
+use logigraph_tracking;
+
+// 1. Vehicle Telemetry (Stores live GPS pings from the .NET Simulator)
+db.createCollection("vehicle_telemetry");
+db.vehicle_telemetry.createIndex({ "location": "2dsphere" }); 
+
+// 2. Shipment History (Audit trail for status changes)
+db.createCollection("shipment_history");
+
+// 3. Route Conditions (Stores dynamic traffic data for Java DSA)
+db.createCollection("route_conditions");
+
+
+Testing Data
+
+
+// Switch to your tracking database
+use logigraph_tracking;
+
+// 1. Vehicle Telemetry (Stores live GPS pings from the .NET Simulator)
+db.createCollection("vehicle_telemetry");
+db.vehicle_telemetry.createIndex({ "location": "2dsphere" }); 
+
+// 2. Shipment History (Audit trail for status changes)
+db.createCollection("shipment_history");
+
+// 3. Route Conditions (Stores dynamic traffic data for Java DSA)
+db.createCollection("route_conditions");
