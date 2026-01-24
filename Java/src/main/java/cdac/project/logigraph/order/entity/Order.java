@@ -1,5 +1,6 @@
 package cdac.project.logigraph.order.entity;
 
+import cdac.project.logigraph.order.enums.OrderStatus;
 import jakarta.persistence.*;
 
 @Entity
@@ -22,8 +23,9 @@ public class Order {
     @Column(name = "assigned_vehicle_id")
     private Integer assignedVehicleId;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private String status;
+    private OrderStatus status;
 
     @Column(name = "dest_lat", nullable = false)
     private double destLat;
@@ -51,7 +53,7 @@ public class Order {
         return assignedVehicleId;
     }
 
-    public String getStatus() {
+    public OrderStatus getStatus() {
         return status;
     }
 
@@ -79,7 +81,7 @@ public class Order {
         this.assignedVehicleId = assignedVehicleId;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(OrderStatus status) {
         this.status = status;
     }
 

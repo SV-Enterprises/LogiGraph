@@ -1,5 +1,6 @@
 package cdac.project.logigraph.auth.entity;
 
+import cdac.project.logigraph.auth.enums.UserRole;
 import jakarta.persistence.*;
 
 @Entity
@@ -16,8 +17,9 @@ public class User {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private String role;
+    private UserRole role;
 
     public Integer getId() {
         return id;
@@ -31,7 +33,7 @@ public class User {
         return passwordHash;
     }
 
-    public String getRole() {
+    public UserRole getRole() {
         return role;
     }
 
@@ -43,7 +45,7 @@ public class User {
         this.passwordHash = passwordHash;
     }
 
-    public void setRole(String role) {
+    public void setRole(UserRole role) {
         this.role = role;
     }
 }

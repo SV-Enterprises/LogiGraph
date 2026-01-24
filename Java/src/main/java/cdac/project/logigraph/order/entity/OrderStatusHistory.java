@@ -1,5 +1,6 @@
 package cdac.project.logigraph.order.entity;
 
+import cdac.project.logigraph.order.enums.OrderStatus;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -14,8 +15,9 @@ public class OrderStatusHistory {
     @Column(name = "order_id", nullable = false)
     private Integer orderId;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private String status;
+    private OrderStatus status;
 
     @Column(name = "changed_at", updatable = false)
     private LocalDateTime changedAt;
@@ -33,7 +35,7 @@ public class OrderStatusHistory {
         return orderId;
     }
 
-    public String getStatus() {
+    public OrderStatus getStatus() {
         return status;
     }
 
@@ -45,7 +47,7 @@ public class OrderStatusHistory {
         this.orderId = orderId;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(OrderStatus status) {
         this.status = status;
     }
 }

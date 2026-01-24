@@ -1,5 +1,6 @@
 package cdac.project.logigraph.vehicle.entity;
 
+import cdac.project.logigraph.vehicle.enums.VehicleStatus;
 import jakarta.persistence.*;
 
 @Entity
@@ -16,8 +17,9 @@ public class Vehicle {
     @Column(nullable = false, length = 50)
     private String type;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private String status;
+    private VehicleStatus status;
 
     @Column(name = "current_warehouse_id")
     private Integer currentWarehouseId;
@@ -34,7 +36,7 @@ public class Vehicle {
         return type;
     }
 
-    public String getStatus() {
+    public VehicleStatus getStatus() {
         return status;
     }
 
@@ -50,7 +52,7 @@ public class Vehicle {
         this.type = type;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(VehicleStatus status) {
         this.status = status;
     }
 
