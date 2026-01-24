@@ -5,6 +5,7 @@ Java
 -----------------------------------------------------------
 Entity
 
+
 Warehouse - Mandar
 --------------------------------------------------------------
 package cdac.project.LogiGraph.Entity;
@@ -33,4 +34,286 @@ public class Warehouse {
 
 }
 -----------------------------------------------------------------
+
+
+
+
+
+Products - Saurabh
+----------------------------------------------------------------------
+package cdac.project.LogiGraph.Entity;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "products")
+public class Product {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+
+    private String sku;
+
+    private Double unitPrice;
+}
+
+-----------------------------------------------------------------------------
+
+
+
+
+User - Saurabh
+--------------------------------------------------------------------------
+package cdac.project.LogiGraph.Entity;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "users")
+public class User {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String username;
+
+    private String passwordHash;
+
+    private String role;
+}
+---------------------------------------------------------------------------------
+
+
+
+Customer -
+-----------------------------------------------------------------------------------
+package cdac.project.LogiGraph.Entity;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "customers")
+public class Customer {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String fullName;
+
+    private String phone;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private User user;
+}
+--------------------------------------------------------------------------------------------
+
+
+
+
+Vehicle
+---------------------------------------------------------------------------------------------
+package cdac.project.LogiGraph.Entity;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "vehicles")
+public class Vehicle {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String plateNumber;
+
+    private String type;
+
+    private String status;
+
+    @ManyToOne
+    @JoinColumn(name = "current_warehouse_id")
+    private Warehouse warehouse;
+}
+-----------------------------------------------------------------------------------------------
+
+
+
+
+Route - Anushka
+----------------------------------------------------------------------------------------------
+package cdac.project.LogiGraph.Entity;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "routes")
+public class Route {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private Double distanceKm;
+
+    private Integer baseTimeMins;
+
+    @ManyToOne
+    @JoinColumn(name = "source_warehouse_id")
+    private Warehouse sourceWarehouse;
+
+    @ManyToOne
+    @JoinColumn(name = "destination_warehouse_id")
+    private Warehouse destinationWarehouse;
+}
+--------------------------------------------------------------------------------------------
+
+
+
+
+WarehouseInventory
+-----------------------------------------------------------------------------------------
+package cdac.project.LogiGraph.Entity;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "warehouse_inventory")
+public class WarehouseInventory {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private Integer quantity;
+
+    @ManyToOne
+    @JoinColumn(name = "warehouse_id")
+    private Warehouse warehouse;
+
+    @ManyToOne
+    @JoinColumn(name = "product_id")
+    private Product product;
+}
+--------------------------------------------------------------------------------------------------
+
+
+
+
+Order
+------------------------------------------------------------------------------------------------
+package cdac.project.LogiGraph.Entity;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "orders")
+public class Order {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String trackingId;
+
+    private String status;
+
+    private Double destLat;
+    private Double destLng;
+
+    private LocalDateTime createdAt;
+
+    @ManyToOne
+    @JoinColumn(name = "customer_id")
+    private Customer customer;
+
+    @ManyToOne
+    @JoinColumn(name = "assigned_vehicle_id")
+    private Vehicle vehicle;
+}
+------------------------------------------------------------------------------------------------
+
+
+
+
+OrderItem
+----------------------------------------------------------------------------------------------
+package cdac.project.LogiGraph.Entity;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "order_items")
+public class OrderItem {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private Integer quantity;
+
+    @ManyToOne
+    @JoinColumn(name = "order_id")
+    private Order order;
+
+    @ManyToOne
+    @JoinColumn(name = "product_id")
+    private Product product;
+}
+-----------------------------------------------------------------------------------------------
+
+
+
+
+
 
