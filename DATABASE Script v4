@@ -1,0 +1,204 @@
+Database Scripts:
+
+MySql
+
+1️⃣ Database
+CREATE DATABASE IF NOT EXISTS logigraph_db;
+USE logigraph_db;
+
+2️⃣ Users (Authentication)
+CREATE TABLE users (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('ADMIN', 'MANAGER', 'CUSTOMER') NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+3️⃣ Customers
+CREATE TABLE customers (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL UNIQUE,
+    full_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(15),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_customer_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+4️⃣ Warehouses
+CREATE TABLE warehouses (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    latitude DECIMAL(10,8) NOT NULL,
+    longitude DECIMAL(11,8) NOT NULL,
+    address TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (latitude BETWEEN -90 AND 90),
+    CHECK (longitude BETWEEN -180 AND 180)
+);
+
+5️⃣ Products
+CREATE TABLE products (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    sku VARCHAR(50) NOT NULL UNIQUE,
+    unit_price DECIMAL(10,2) NOT NULL CHECK (unit_price >= 0),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+6️⃣ Warehouse Inventory
+CREATE TABLE warehouse_inventory (
+    warehouse_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (warehouse_id, product_id),
+
+    CHECK (quantity >= 0),
+
+    CONSTRAINT fk_inventory_warehouse
+        FOREIGN KEY (warehouse_id)
+        REFERENCES warehouses(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_inventory_product
+        FOREIGN KEY (product_id)
+        REFERENCES products(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+7️⃣ Routes (Graph Edges)
+CREATE TABLE routes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    source_warehouse_id INT NOT NULL,
+    destination_warehouse_id INT NOT NULL,
+    distance_km DECIMAL(10,2) NOT NULL,
+    base_time_mins INT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_bidirectional BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (distance_km > 0),
+    CHECK (base_time_mins > 0),
+
+    UNIQUE (source_warehouse_id, destination_warehouse_id),
+
+    CONSTRAINT fk_route_source
+        FOREIGN KEY (source_warehouse_id)
+        REFERENCES warehouses(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_route_destination
+        FOREIGN KEY (destination_warehouse_id)
+        REFERENCES warehouses(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+8️⃣ Vehicles
+CREATE TABLE vehicles (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    plate_number VARCHAR(20) NOT NULL UNIQUE,
+    type VARCHAR(50) NOT NULL,
+    status ENUM('IDLE', 'ASSIGNED', 'LOADING', 'IN_TRANSIT', 'DELIVERED', 'MAINTENANCE')
+           NOT NULL DEFAULT 'IDLE',
+    current_warehouse_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_vehicle_warehouse
+        FOREIGN KEY (current_warehouse_id)
+        REFERENCES warehouses(id)
+        ON DELETE SET NULL
+        ON UPDATE CASCADE
+);
+
+9️⃣ Orders
+CREATE TABLE orders (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    tracking_id VARCHAR(50) NOT NULL UNIQUE,
+    customer_id INT NOT NULL,
+    fulfillment_warehouse_id INT NOT NULL,
+    assigned_vehicle_id INT,
+    status ENUM('PLACED', 'ASSIGNED', 'IN_TRANSIT', 'DELAYED', 'DELIVERED', 'CANCELLED')
+           NOT NULL DEFAULT 'PLACED',
+    dest_lat DECIMAL(10,8) NOT NULL,
+    dest_lng DECIMAL(11,8) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (dest_lat BETWEEN -90 AND 90),
+    CHECK (dest_lng BETWEEN -180 AND 180),
+
+    CONSTRAINT fk_order_customer
+        FOREIGN KEY (customer_id)
+        REFERENCES customers(id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_order_fulfillment_warehouse
+        FOREIGN KEY (fulfillment_warehouse_id)
+        REFERENCES warehouses(id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_order_vehicle
+        FOREIGN KEY (assigned_vehicle_id)
+        REFERENCES vehicles(id)
+        ON DELETE SET NULL
+        ON UPDATE CASCADE
+);
+
+🔟 Order Items (NO DUPLICATES)
+CREATE TABLE order_items (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    order_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+
+    CHECK (quantity > 0),
+
+    UNIQUE (order_id, product_id),
+
+    CONSTRAINT fk_orderitem_order
+        FOREIGN KEY (order_id)
+        REFERENCES orders(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_orderitem_product
+        FOREIGN KEY (product_id)
+        REFERENCES products(id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+);
+
+1️⃣1️⃣ Order Status History
+CREATE TABLE order_status_history (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    order_id INT NOT NULL,
+    status ENUM('PLACED', 'ASSIGNED', 'IN_TRANSIT', 'DELAYED', 'DELIVERED', 'CANCELLED')
+           NOT NULL,
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_order_status_order
+        FOREIGN KEY (order_id)
+        REFERENCES orders(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+1️⃣2️⃣ Indexes on Foreign Keys (Performance)
+CREATE INDEX idx_inventory_product ON warehouse_inventory(product_id);
+CREATE INDEX idx_route_source ON routes(source_warehouse_id);
+CREATE INDEX idx_route_destination ON routes(destination_warehouse_id);
+CREATE INDEX idx_order_customer ON orders(customer_id);
+CREATE INDEX idx_order_vehicle ON orders(assigned_vehicle_id);
+CREATE INDEX idx_order_status_order ON order_status_history(order_id);
