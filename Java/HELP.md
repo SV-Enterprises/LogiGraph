@@ -4,11 +4,11 @@
 For further reference, please consider the following sections:
 
 * [Official Apache Maven documentation](https://maven.apache.org/guides/index.html)
-* [Spring Boot Maven Plugin Reference Guide](https://docs.spring.io/spring-boot/4.0.1/maven-plugin)
-* [Create an OCI image](https://docs.spring.io/spring-boot/4.0.1/maven-plugin/build-image.html)
-* [Spring Web](https://docs.spring.io/spring-boot/4.0.1/reference/web/servlet.html)
-* [Spring Data JPA](https://docs.spring.io/spring-boot/4.0.1/reference/data/sql.html#data.sql.jpa-and-spring-data)
-* [MongoDB](https://docs.spring.io/spring-boot/4.0.1/reference/data/nosql.html#data.nosql.mongodb)
+* [Spring Boot Maven Plugin Reference Guide](https://docs.spring.io/spring-boot/4.0.2/maven-plugin)
+* [Create an OCI image](https://docs.spring.io/spring-boot/4.0.2/maven-plugin/build-image.html)
+* [Spring Web](https://docs.spring.io/spring-boot/4.0.2/reference/web/servlet.html)
+* [Spring Data JPA](https://docs.spring.io/spring-boot/4.0.2/reference/data/sql.html#data.sql.jpa-and-spring-data)
+* [MongoDB](https://docs.spring.io/spring-boot/4.0.2/reference/data/nosql.html#data.nosql.mongodb)
 
 ### Guides
 The following guides illustrate how to use some features concretely:

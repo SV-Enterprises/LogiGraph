@@ -5,14 +5,14 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.0.1</version>
+		<version>4.0.2</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>cdac.project.LogiGraph</groupId>
-	<artifactId>demo</artifactId>
+	<groupId>cdac.project.logigraph</groupId>
+	<artifactId>sv.logigraph.v1</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>LogiGraph</name>
-	<description>CDAC PG-DAC Final Project</description>
+	<name>sv.logigraph.v1</name>
+	<description>CDAC project of LogiGraph in Spring Boot</description>
 	<url/>
 	<licenses>
 		<license/>
