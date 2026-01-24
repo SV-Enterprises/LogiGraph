@@ -106,16 +106,12 @@ db.createCollection("route_conditions");
 
 Testing Data
 
+-- Insert Real-World Hubs
+INSERT INTO warehouses (name, latitude, longitude) VALUES 
+('Waluj ICD Hub (Aurangabad)', 19.8458, 75.2215),
+('Wagholi Logistics (Pune)', 18.5793, 73.9830),
+('Masjid Bandar Port (Mumbai)', 18.9482, 72.8422);
 
-// Switch to your tracking database
-use logigraph_tracking;
-
-// 1. Vehicle Telemetry (Stores live GPS pings from the .NET Simulator)
-db.createCollection("vehicle_telemetry");
-db.vehicle_telemetry.createIndex({ "location": "2dsphere" }); 
-
-// 2. Shipment History (Audit trail for status changes)
-db.createCollection("shipment_history");
-
-// 3. Route Conditions (Stores dynamic traffic data for Java DSA)
-db.createCollection("route_conditions");
+-- Insert a Test Route
+INSERT INTO routes (source_warehouse_id, destination_warehouse_id, distance_km, base_time_mins) 
+VALUES (1, 2, 235.0, 300); -- Aurangabad to Pune
