@@ -312,6 +312,181 @@ public class OrderItem {
 }
 -----------------------------------------------------------------------------------------------
 
+-----------------------------------------------------------------------------------------------
+
+
+26-02-2026
+
+Repositories:
+
+1] UserRepository
+
+package cdac.project.logigraph.auth.repository;
+
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cdac.project.logigraph.auth.entity.User;
+
+public interface UserRepository extends JpaRepository<User, Long>{
+
+	Optional<User> findByUsername(String username);
+}
+
+
+2] CustomerRepository
+
+package cdac.project.logigraph.customer.repository;
+
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cdac.project.logigraph.customer.entity.Customer;
+
+public interface CustomerRepository extends JpaRepository<Customer, Long> {
+
+	Optional<Customer> findByUserId(Long userId);
+	
+}
+
+
+3] WarehouseRepository
+
+package cdac.project.logigraph.routing.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cdac.project.logigraph.inventory.entity.Warehouse;
+
+public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
+
+}
+
+
+4] RouteRepository
+
+package cdac.project.logigraph.routing.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cdac.project.logigraph.routing.entity.Route;
+
+public interface RouteRepository extends JpaRepository<Route, Long>{
+
+	List<Route> findByIsActiveTrue();
+}
+
+
+5] ProductRepository
+
+package cdac.project.logigraph.catalog.repository;
+
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cdac.project.logigraph.catalog.entity.Product;
+
+public interface ProductRepository extends JpaRepository<Product, Long>{
+
+	Optional<Product> findBySku(String sku);
+}
+
+
+6] WarehouseInventoryRepository 
+
+package cdac.project.logigraph.inventory.repository;
+
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cdac.project.logigraph.inventory.entity.WarehouseInventory;
+
+public interface WarehouseInventoryRepository extends JpaRepository<WarehouseInventory, Long> {
+
+	Optional<WarehouseInventory> findByWarehouseIdAndProductId(
+            Long warehouseId,
+            Long productId
+    );
+}
+
+
+7]  VehicleRepository
+
+package cdac.project.logigraph.vehicle.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cdac.project.logigraph.vehicle.entity.Vehicle;
+
+public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
+	
+	List<Vehicle> findByStatus(String status);
+}
+
+
+8] OrderRepository
+
+package cdac.project.logigraph.order.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cdac.project.logigraph.order.entity.Order;
+
+public interface OrderRepository extends JpaRepository<Order, Long>{
+
+	Optional<Order> findByTrackingId(String trackingId);
+	
+	List<Order> findByCustomerId(Long customerId);
+}
+
+
+9] OrderItemRepository
+
+package cdac.project.logigraph.order.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cdac.project.logigraph.order.entity.OrderItem;
+
+public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
+	
+	List<OrderItem> findByOrderId(Long orderId);
+}
+
+
+10] OrderStatusHistoryRepository
+
+package cdac.project.logigraph.order.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cdac.project.logigraph.order.entity.OrderStatusHistory;
+
+public interface OrderStatusHistoryRepository extends JpaRepository<OrderStatusHistory, Long> {
+
+	List<OrderStatusHistory> findByOrderId(Long OrderId);
+}
+
+
+
+
+
+
 
 
 
