@@ -703,6 +703,495 @@ public interface OrderStatusHistoryRepository
 
     List<OrderStatusHistory> findByOrderIdOrderByChangedAtAsc(Integer orderId);
 }
+----------------------------------------------------------------------------------------------------------------------------------------------
+Authentication JWT Complete(MVH)
+----------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------
+SecurityConfig
+----------------------------------------------------------------------------
+
+package cdac.project.logigraph.auth.config;
+
+import cdac.project.logigraph.auth.jwt.JwtAuthenticationFilter;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
+
+@Configuration
+@EnableMethodSecurity
+public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
+        http
+            // Stateless JWT → CSRF not required
+            .csrf(csrf -> csrf.disable())
+            .cors(cors -> {})
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "MANAGER")
+                .requestMatchers("/api/customer/**").hasRole("CUSTOMER")
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(
+                jwtAuthenticationFilter,
+                UsernamePasswordAuthenticationFilter.class
+            );
+
+        return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(12);
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration configuration
+    ) throws Exception {
+        return configuration.getAuthenticationManager();
+    }
+}
+
+--------------------------------------------------------------------------------------------
+JwtAuthenticationFilter
+--------------------------------------------------------------------------------------------
+
+package cdac.project.logigraph.auth.jwt;
+
+import cdac.project.logigraph.auth.service.CustomUserDetailsService;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+@Component
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private final JwtUtil jwtUtil;
+    private final CustomUserDetailsService userDetailsService;
+
+    public JwtAuthenticationFilter(
+            JwtUtil jwtUtil,
+            CustomUserDetailsService userDetailsService
+    ) {
+        this.jwtUtil = jwtUtil;
+        this.userDetailsService = userDetailsService;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return request.getServletPath().startsWith("/api/auth/");
+    }
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
+
+        String authHeader = request.getHeader("Authorization");
+
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+
+            String token = authHeader.substring(7);
+
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                String username = jwtUtil.extractUsername(token);
+
+                if (username != null) {
+
+                    UserDetails userDetails =
+                            userDetailsService.loadUserByUsername(username);
+
+                    if (jwtUtil.isTokenValid(token, userDetails)) {
+
+                        UsernamePasswordAuthenticationToken authToken =
+                                new UsernamePasswordAuthenticationToken(
+                                        userDetails,
+                                        null,
+                                        userDetails.getAuthorities()
+                                );
+
+                        authToken.setDetails(
+                                new WebAuthenticationDetailsSource()
+                                        .buildDetails(request)
+                        );
+
+                        SecurityContextHolder
+                                .getContext()
+                                .setAuthentication(authToken);
+                    }
+                }
+            }
+        }
+
+        filterChain.doFilter(request, response);
+    }
+}
+
+------------------------------------------------------------------------------------------------------------------
+JwtUtil
+------------------------------------------------------------------------------------------------------------------
+
+package cdac.project.logigraph.auth.jwt;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+import java.security.Key;
+import java.util.Date;
+
+@Component
+public class JwtUtil {
+
+    private final Key signingKey;
+    private final long expirationMs;
+
+    public JwtUtil(
+            @Value("${jwt.secret}") String secret,
+            @Value("${jwt.expiration-ms}") long expirationMs
+    ) {
+        this.signingKey = Keys.hmacShaKeyFor(
+                secret.getBytes(StandardCharsets.UTF_8)
+        );
+        this.expirationMs = expirationMs;
+    }
+
+    public String generateToken(String username) {
+
+        return Jwts.builder()
+                .setSubject(username)
+                .setIssuedAt(new Date())
+                .setExpiration(
+                        new Date(System.currentTimeMillis() + expirationMs)
+                )
+                .signWith(signingKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public String extractUsername(String token) {
+        return getClaims(token).getSubject();
+    }
+
+    public boolean isTokenValid(String token, UserDetails userDetails) {
+
+        final String username = extractUsername(token);
+
+        return username.equals(userDetails.getUsername())
+                && !isTokenExpired(token);
+    }
+
+    private boolean isTokenExpired(String token) {
+        return getClaims(token)
+                .getExpiration()
+                .before(new Date());
+    }
+
+    private Claims getClaims(String token) {
+
+        return Jwts.parserBuilder()
+                .setSigningKey(signingKey)
+                .setAllowedClockSkewSeconds(30)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
+}
+
+----------------------------------------------------------------------------------------------------------
+CustomUserDetailsService
+----------------------------------------------------------------------------------------------------------
+
+package cdac.project.logigraph.auth.service;
+
+import cdac.project.logigraph.auth.entity.User;
+import cdac.project.logigraph.auth.repository.UserRepository;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+import java.util.Collections;
+
+@Service
+public class CustomUserDetailsService implements UserDetailsService {
+
+    private final UserRepository userRepository;
+
+    public CustomUserDetailsService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String username)
+            throws UsernameNotFoundException {
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() ->
+                        new UsernameNotFoundException("User not found")
+                );
+
+        return new org.springframework.security.core.userdetails.User(
+                user.getUsername(),
+                user.getPasswordHash(),
+                true,   // enabled
+                true,   // accountNonExpired
+                true,   // credentialsNonExpired
+                true,   // accountNonLocked
+                Collections.singletonList(
+                        new SimpleGrantedAuthority(
+                                "ROLE_" + user.getRole().name()
+                        )
+                )
+        );
+    }
+}
+
+-------------------------------------------------------------------------------------------
+RegisterRequest.java (DTO)
+-------------------------------------------------------------------------------------------
+package cdac.project.logigraph.auth.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public class RegisterRequest {
+
+    @NotBlank
+    @Size(min = 4, max = 50)
+    private String username;
+
+    @NotBlank
+    @Size(min = 8, max = 100)
+    private String password;
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+}
+--------------------------------------------------------------------------------------------
+LoginRequest.java (DTO)
+--------------------------------------------------------------------------------------------
+package cdac.project.logigraph.auth.dto;
+
+import jakarta.validation.constraints.NotBlank;
+
+public class LoginRequest {
+
+    @NotBlank
+    private String username;
+
+    @NotBlank
+    private String password;
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+}
+---------------------------------------------------------------------------------------------
+LoginRequest.java (DTO)
+---------------------------------------------------------------------------------------------
+package cdac.project.logigraph.auth.dto;
+
+import jakarta.validation.constraints.NotBlank;
+
+public class LoginRequest {
+
+    @NotBlank
+    private String username;
+
+    @NotBlank
+    private String password;
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+}
+------------------------------------------------------------------------------------------------
+AuthResponse.java (DTO)
+------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.auth.dto;
+
+public class AuthResponse {
+
+    private final String token;
+
+    public AuthResponse(String token) {
+        this.token = token;
+    }
+
+    public String getToken() {
+        return token;
+    }
+}
+
+-------------------------------------------------------------------------------------------
+AuthController
+-------------------------------------------------------------------------------------------
+package cdac.project.logigraph.auth.controller;
+
+import cdac.project.logigraph.auth.dto.AuthResponse;
+import cdac.project.logigraph.auth.dto.LoginRequest;
+import cdac.project.logigraph.auth.dto.RegisterRequest;
+import cdac.project.logigraph.auth.service.AuthService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/auth")
+public class AuthController {
+
+    private final AuthService authService;
+
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<Void> register(
+            @Valid @RequestBody RegisterRequest request
+    ) {
+        authService.register(
+                request.getUsername(),
+                request.getPassword()
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<AuthResponse> login(
+            @Valid @RequestBody LoginRequest request
+    ) {
+        String token = authService.login(
+                request.getUsername(),
+                request.getPassword()
+        );
+
+        return ResponseEntity.ok(new AuthResponse(token));
+    }
+}
+-----------------------------------------------------------------------------------------------------
+AuthService
+-----------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.auth.service;
+
+import cdac.project.logigraph.auth.entity.User;
+import cdac.project.logigraph.auth.enums.UserRole;
+import cdac.project.logigraph.auth.jwt.JwtUtil;
+import cdac.project.logigraph.auth.repository.UserRepository;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class AuthService {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
+
+    public AuthService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            JwtUtil jwtUtil
+    ) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtUtil = jwtUtil;
+    }
+
+    @Transactional
+    public void register(String username, String password) {
+
+        if (userRepository.existsByUsername(username)) {
+            throw new IllegalStateException("Username already exists");
+        }
+
+        User user = new User();
+        user.setUsername(username);
+        user.setPasswordHash(passwordEncoder.encode(password));
+
+        // ENFORCED ROLE — NEVER FROM CLIENT
+        user.setRole(UserRole.CUSTOMER);
+
+        userRepository.save(user);
+    }
+
+    public String login(String username, String password) {
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() ->
+                        new UsernameNotFoundException("Invalid credentials")
+                );
+
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new BadCredentialsException("Invalid credentials");
+        }
+
+        // JWT IDENTIFIES USER — AUTHORIZATION COMES FROM DB
+        return jwtUtil.generateToken(user.getUsername());
+    }
+}
+-----------------------------------------------------------------------------------------------------------
+
+
+
 
 
 
