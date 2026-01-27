@@ -1191,7 +1191,444 @@ public class AuthService {
 -----------------------------------------------------------------------------------------------------------
 
 
+----------------------------------------------------------------------------------------------------------------
+SERVICES: (SAURABH)
+----------------------------------------------------------------------------------------------------------------
 
+1.	WarehouseService
+
+package cdac.project.logigraph.inventory.service;
+
+import java.util.List;
+
+import cdac.project.logigraph.inventory.entity.Warehouse;
+
+public interface WarehouseService {
+
+    Warehouse getWarehouseById(Integer warehouseId);
+
+    List<Warehouse> getAllWarehouses();
+}
+
+
+Implementation
+package cdac.project.logigraph.inventory.service;
+
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
+import cdac.project.logigraph.inventory.entity.Warehouse;
+import cdac.project.logigraph.inventory.repository.WarehouseRepository;
+
+@Service
+public class WarehouseServiceImpl implements WarehouseService {
+
+    private final WarehouseRepository warehouseRepository;
+
+    public WarehouseServiceImpl(WarehouseRepository warehouseRepository) {
+        this.warehouseRepository = warehouseRepository;
+    }
+
+    @Override
+    public Warehouse getWarehouseById(Integer warehouseId) {
+        return warehouseRepository.findById(warehouseId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Warehouse not found"));
+    }
+
+    @Override
+    public List<Warehouse> getAllWarehouses() {
+        return warehouseRepository.findAll();
+    }
+}
+
+---------------------------------------------------------------------------------------------------
+
+2.	RoutingService (INTERFACE)
+
+package cdac.project.logigraph.routing.service;
+
+import java.util.List;
+
+public interface RoutingService {
+
+    /**
+     * Finds the nearest warehouse from a list of candidate warehouses
+     * using graph-based routing (Dijkstra).
+     *
+     * @param sourceWarehouseId      warehouse where routing starts
+     * @param candidateWarehouseIds  warehouses that can fulfill the order
+     * @return nearest warehouse id
+     */
+    Integer findNearestWarehouse(
+            Integer sourceWarehouseId,
+            List<Integer> candidateWarehouseIds
+    );
+}
+
+
+RoutingServiceImpl :
+
+package cdac.project.logigraph.routing.service;
+
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
+@Service
+public class RoutingServiceImpl implements RoutingService {
+
+    @Override
+    public Integer findNearestWarehouse(
+            Integer sourceWarehouseId,
+            List<Integer> candidateWarehouseIds
+    ) {
+
+        // Validate inputs
+        if (sourceWarehouseId == null) {
+            throw new IllegalArgumentException("Source warehouse id cannot be null");
+        }
+
+        if (candidateWarehouseIds == null || candidateWarehouseIds.isEmpty()) {
+            throw new IllegalStateException("No candidate warehouses available for routing");
+        }
+
+        /*
+         * Routing logic (Dijkstra) will be implemented here.
+         * Until then, fail fast to prevent incorrect routing decisions.
+         */
+        throw new UnsupportedOperationException(
+                "Routing algorithm not implemented yet"
+        );
+    }
+}
+
+-----------------------------------------------------------------------------------------------
+3.	InventoryService (CRITICAL)
+
+package cdac.project.logigraph.inventory.service;
+
+public interface InventoryService {
+
+    boolean hasSufficientStock(
+            Integer warehouseId,
+            Integer productId,
+            int quantity
+    );
+
+    void reserveStock(
+            Integer warehouseId,
+            Integer productId,
+            int quantity
+    );
+
+    void restoreStock(
+            Integer warehouseId,
+            Integer productId,
+            int quantity
+    );
+}
+
+
+Implementation (MATCHES YOUR REPO EXACTLY)
+
+package cdac.project.logigraph.inventory.service;
+import org.springframework.stereotype.Service;
+
+import cdac.project.logigraph.inventory.repository.WarehouseInventoryRepository;
+import jakarta.transaction.Transactional;
+
+
+
+
+@Service
+public class InventoryServiceImpl implements InventoryService {
+
+    private final WarehouseInventoryRepository inventoryRepository;
+    public InventoryServiceImpl(
+            WarehouseInventoryRepository inventoryRepository) {
+        this.inventoryRepository = inventoryRepository;
+    }
+
+    @Override
+    public boolean hasSufficientStock(
+            Integer warehouseId,
+            Integer productId,
+            int quantity
+    ) {
+        return inventoryRepository
+                .findByWarehouseIdAndProductId(warehouseId, productId)
+                .map(inv -> inv.getQuantity() >= quantity)
+                .orElse(false);
+    }
+
+    @Override
+    @Transactional
+    public void reserveStock(
+            Integer warehouseId,
+            Integer productId,
+            int quantity
+    ) {
+        int rowsUpdated =
+                inventoryRepository.reserveStock(
+                        warehouseId, productId, quantity);
+
+        if (rowsUpdated == 0) {
+            throw new IllegalStateException("Insufficient stock");
+        }
+    }
+
+    @Override
+    @Transactional
+    public void restoreStock(
+            Integer warehouseId,
+            Integer productId,
+            int quantity
+    ) {
+        inventoryRepository.restoreStock(
+                warehouseId, productId, quantity);
+    }
+}
+CORRECT VehicleRepository (REPLACE YOURS)
+package cdac.project.logigraph.vehicle.repository;
+
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.stereotype.Repository;
+
+import cdac.project.logigraph.vehicle.entity.Vehicle;
+import cdac.project.logigraph.vehicle.enums.VehicleStatus;
+import jakarta.persistence.LockModeType;
+
+@Repository
+public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
+
+    /**
+     * Fetches and locks ONE IDLE vehicle from a specific warehouse.
+     * Prevents concurrent assignment.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Vehicle> findFirstByStatusAndCurrentWarehouseId(
+            VehicleStatus status,
+            Integer currentWarehouseId
+    );
+
+    // (Optional – keep only if you use them elsewhere)
+    List<Vehicle> findByStatusIn(List<VehicleStatus> statuses);
+}
+
+-----------------------------------------------------------------------------------------------------------
+
+4.	VehicleService
+
+package cdac.project.logigraph.vehicle.service;
+
+import cdac.project.logigraph.vehicle.entity.Vehicle;
+
+public interface VehicleService {
+
+    Vehicle assignVehicle(Integer warehouseId);
+}
+
+
+VehicleServiceImpl:
+
+package cdac.project.logigraph.vehicle.service;
+
+import org.springframework.stereotype.Service;
+
+import cdac.project.logigraph.vehicle.entity.Vehicle;
+import cdac.project.logigraph.vehicle.enums.VehicleStatus;
+import cdac.project.logigraph.vehicle.repository.VehicleRepository;
+import jakarta.transaction.Transactional;
+
+@Service
+public class VehicleServiceImpl implements VehicleService {
+
+    private final VehicleRepository vehicleRepository;
+
+    public VehicleServiceImpl(VehicleRepository vehicleRepository) {
+        this.vehicleRepository = vehicleRepository;
+    }
+
+    @Override
+    @Transactional
+    public Vehicle assignVehicle(Integer warehouseId) {
+
+        if (warehouseId == null) {
+            throw new IllegalArgumentException("Warehouse id cannot be null");
+        }
+
+        Vehicle vehicle = vehicleRepository
+                .findFirstByStatusAndCurrentWarehouseId(
+                        VehicleStatus.IDLE,
+                        warehouseId
+                )
+                .orElseThrow(() ->
+                        new IllegalStateException(
+                                "No available vehicles at warehouse " + warehouseId
+                        )
+                );
+
+        vehicle.setStatus(VehicleStatus.ASSIGNED);
+
+        return vehicle;
+    }
+}
+
+---------------------------------------------------------------------------------------------------------
+
+5.	OrderService (INTERFACE)
+
+package cdac.project.logigraph.order.service;
+import cdac.project.logigraph.order.entity.Order;
+
+public interface OrderService {
+
+    Order placeOrder(
+            Integer customerId,
+            Integer productId,
+            int quantity,
+            double destLat,
+            double destLng
+    );
+}
+OrderServiceImpl
+
+package cdac.project.logigraph.order.service;
+
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+
+import cdac.project.logigraph.inventory.service.InventoryService;
+import cdac.project.logigraph.inventory.service.WarehouseService;
+import cdac.project.logigraph.order.entity.Order;
+import cdac.project.logigraph.order.entity.OrderItem;
+import cdac.project.logigraph.order.entity.OrderStatusHistory;
+import cdac.project.logigraph.order.enums.OrderStatus;
+import cdac.project.logigraph.order.repository.OrderItemRepository;
+import cdac.project.logigraph.order.repository.OrderRepository;
+import cdac.project.logigraph.order.repository.OrderStatusHistoryRepository;
+import cdac.project.logigraph.vehicle.entity.Vehicle;
+import cdac.project.logigraph.vehicle.service.VehicleService;
+import jakarta.transaction.Transactional;
+
+@Service
+public class OrderServiceImpl implements OrderService {
+
+    private final InventoryService inventoryService;
+    private final WarehouseService warehouseService;
+    private final VehicleService vehicleService;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    public OrderServiceImpl(
+            InventoryService inventoryService,
+            WarehouseService warehouseService,
+            VehicleService vehicleService,
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            OrderStatusHistoryRepository orderStatusHistoryRepository
+    ) {
+        this.inventoryService = inventoryService;
+        this.warehouseService = warehouseService;
+        this.vehicleService = vehicleService;
+        this.orderRepository = orderRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.orderStatusHistoryRepository = orderStatusHistoryRepository;
+    }
+
+    @Override
+    @Transactional
+    public Order placeOrder(
+            Integer customerId,
+            Integer productId,
+            int quantity,
+            double destLat,
+            double destLng
+    ) {
+
+        // 1️⃣   Validate input
+        if (customerId == null || productId == null) {
+            throw new IllegalArgumentException("CustomerId and ProductId cannot be null");
+        }
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be greater than zero");
+        }
+
+        // 2️⃣   Fetch all warehouses
+        List<Integer> warehouseIds = warehouseService.getAllWarehouses()
+                .stream()
+                .map(w -> w.getId())
+                .toList();
+
+        if (warehouseIds.isEmpty()) {
+            throw new IllegalStateException("No warehouses available");
+        }
+
+        // 3️⃣   Filter warehouses with sufficient stock
+        List<Integer> candidateWarehouses = warehouseIds.stream()
+                .filter(wid ->
+                        inventoryService.hasSufficientStock(
+                                wid, productId, quantity
+                        )
+                )
+                .toList();
+
+        if (candidateWarehouses.isEmpty()) {
+            throw new IllegalStateException(
+                    "No warehouse has sufficient stock for product " + productId
+            );
+        }
+
+        // 4️⃣   TEMPORARY: Routing not implemented yet
+        // Choose first suitable warehouse safely
+        Integer fulfillmentWarehouseId = candidateWarehouses.get(0);
+
+        // 5️⃣   Assign vehicle (LOCKED)
+        Vehicle vehicle = vehicleService.assignVehicle(fulfillmentWarehouseId);
+
+        // 6️⃣   Reserve inventory
+        inventoryService.reserveStock(
+                fulfillmentWarehouseId,
+                productId,
+                quantity
+        );
+
+        // 7️⃣   Create order
+        Order order = new Order();
+        order.setTrackingId(UUID.randomUUID().toString());
+        order.setCustomerId(customerId);
+        order.setFulfillmentWarehouseId(fulfillmentWarehouseId);
+        order.setAssignedVehicleId(vehicle.getId());
+        order.setStatus(OrderStatus.ASSIGNED);
+        order.setDestLat(destLat);
+        order.setDestLng(destLng);
+
+        Order savedOrder = orderRepository.save(order);
+
+        // 8️⃣   Create order item
+        OrderItem item = new OrderItem();
+        item.setOrderId(savedOrder.getId());
+        item.setProductId(productId);
+        item.setQuantity(quantity);
+        orderItemRepository.save(item);
+
+        // 9️⃣   Create status history
+        OrderStatusHistory history = new OrderStatusHistory();
+        history.setOrderId(savedOrder.getId());
+        history.setStatus(OrderStatus.ASSIGNED);
+        orderStatusHistoryRepository.save(history);
+
+        return savedOrder;
+    }
+}
 
 
 
