@@ -1339,9 +1339,6 @@ import org.springframework.stereotype.Service;
 import cdac.project.logigraph.inventory.repository.WarehouseInventoryRepository;
 import jakarta.transaction.Transactional;
 
-
-
-
 @Service
 public class InventoryServiceImpl implements InventoryService {
 
@@ -1390,7 +1387,11 @@ public class InventoryServiceImpl implements InventoryService {
                 warehouseId, productId, quantity);
     }
 }
+
+
+------------------------------------------------------------------------------------------------------
 CORRECT VehicleRepository (REPLACE YOURS)
+
 package cdac.project.logigraph.vehicle.repository;
 
 import java.util.Optional;
