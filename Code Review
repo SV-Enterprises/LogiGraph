@@ -1497,6 +1497,7 @@ public interface OrderService {
             double destLng
     );
 }
+
 OrderServiceImpl
 
 package cdac.project.logigraph.order.service;
@@ -1631,8 +1632,184 @@ public class OrderServiceImpl implements OrderService {
     }
 }
 
+------------------------------------------------------------------------------------------------------------------------
 
+routing
+ ├── graph
+ │    ├── GraphNode.java
+ │    ├── GraphEdge.java
+ │    └── DijkstraEngine.java
+ └── service
+      └── RoutingServiceImpl.java
+------------------------------------------------------------------------------------------------------------------------
 
+GraphNode (Node = Warehouse)
+
+package cdac.project.logigraph.routing.graph;
+
+public class GraphNode {
+
+    private final Integer warehouseId;
+
+    public GraphNode(Integer warehouseId) {
+        this.warehouseId = warehouseId;
+    }
+
+    public Integer getWarehouseId() {
+        return warehouseId;
+    }
+}
+-------------------------------------------------------------------------------------------------------------------------
+
+GraphEdge (Edge = Route)
+
+package cdac.project.logigraph.routing.graph;
+
+public class GraphEdge {
+
+    private final Integer from;
+    private final Integer to;
+    private final double weight;
+
+    public GraphEdge(Integer from, Integer to, double weight) {
+        this.from = from;
+        this.to = to;
+        this.weight = weight;
+    }
+
+    public Integer getFrom() {
+        return from;
+    }
+
+    public Integer getTo() {
+        return to;
+    }
+
+    public double getWeight() {
+        return weight;
+    }
+}
+----------------------------------------------------------------------------------------------------------
+
+DijkstraEngine (CORE LOGIC)
+
+package cdac.project.logigraph.routing.graph;
+
+import java.util.*;
+
+public class DijkstraEngine {
+
+    public static Map<Integer, Double> shortestPaths(
+            Integer source,
+            Map<Integer, List<GraphEdge>> graph
+    ) {
+
+        Map<Integer, Double> distances = new HashMap<>();
+        PriorityQueue<int[]> pq =
+                new PriorityQueue<>(Comparator.comparingDouble(a -> a[1]));
+
+        distances.put(source, 0.0);
+        pq.add(new int[]{source, 0});
+
+        while (!pq.isEmpty()) {
+            int[] current = pq.poll();
+            Integer node = current[0];
+            double dist = current[1];
+
+            if (dist > distances.get(node)) continue;
+
+            for (GraphEdge edge : graph.getOrDefault(node, List.of())) {
+                double newDist = dist + edge.getWeight();
+
+                if (newDist < distances.getOrDefault(edge.getTo(), Double.MAX_VALUE)) {
+                    distances.put(edge.getTo(), newDist);
+                    pq.add(new int[]{edge.getTo(), (int) newDist});
+                }
+            }
+        }
+        return distances;
+    }
+}
+-------------------------------------------------------------------------------------------------------------------
+
+ ** RoutingServiceImpl (FINAL IMPLEMENTATION)
+
+package cdac.project.logigraph.routing.service;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
+import cdac.project.logigraph.routing.entity.Route;
+import cdac.project.logigraph.routing.graph.DijkstraEngine;
+import cdac.project.logigraph.routing.graph.GraphEdge;
+import cdac.project.logigraph.routing.repository.RouteRepository;
+
+@Service
+public class RoutingServiceImpl implements RoutingService {
+
+    private final RouteRepository routeRepository;
+
+    public RoutingServiceImpl(RouteRepository routeRepository) {
+        this.routeRepository = routeRepository;
+    }
+
+    @Override
+    public Integer findNearestWarehouse(
+            Integer sourceWarehouseId,
+            List<Integer> candidateWarehouseIds
+    ) {
+
+        if (sourceWarehouseId == null) {
+            throw new IllegalArgumentException("Source warehouse id cannot be null");
+        }
+        if (candidateWarehouseIds == null || candidateWarehouseIds.isEmpty()) {
+            throw new IllegalStateException("No candidate warehouses available");
+        }
+
+        // 1️⃣ Load routes
+        List<Route> routes = routeRepository.findByActiveTrue();
+
+        // 2️⃣ Build graph
+        Map<Integer, List<GraphEdge>> graph = new HashMap<>();
+
+        for (Route route : routes) {
+            graph.computeIfAbsent(
+                    route.getSourceWarehouseId(),
+                    k -> new ArrayList<>()
+            ).add(new GraphEdge(
+                    route.getSourceWarehouseId(),
+                    route.getDestinationWarehouseId(),
+                    route.getDistanceKm()
+            ));
+
+            if (route.isBidirectional()) {
+                graph.computeIfAbsent(
+                        route.getDestinationWarehouseId(),
+                        k -> new ArrayList<>()
+                ).add(new GraphEdge(
+                        route.getDestinationWarehouseId(),
+                        route.getSourceWarehouseId(),
+                        route.getDistanceKm()
+                ));
+            }
+        }
+
+        // 3️⃣ Run Dijkstra
+        Map<Integer, Double> distances =
+                DijkstraEngine.shortestPaths(sourceWarehouseId, graph);
+
+        // 4️⃣ Select nearest candidate
+        return candidateWarehouseIds.stream()
+                .filter(distances::containsKey)
+                .min(Comparator.comparingDouble(distances::get))
+                .orElseThrow(() ->
+                        new IllegalStateException("No reachable warehouse found")
+                );
+    }
+}
+----------------------------------------------------------------------------------------------------------
 
 
 
