@@ -10,7 +10,6 @@ import org.springframework.stereotype.Repository;
 
 import cdac.project.logigraph.inventory.entity.WarehouseInventory;
 import cdac.project.logigraph.inventory.entity.WarehouseInventoryId;
-import jakarta.transaction.Transactional;
 
 @Repository
 public interface WarehouseInventoryRepository
@@ -21,13 +20,24 @@ public interface WarehouseInventoryRepository
             Integer productId
     );
 
-    List<WarehouseInventory> findByProductIdAndQuantityGreaterThan(
+    /**
+     * Used ONLY for candidate warehouse discovery.
+     * Do NOT use this for final stock reservation.
+     */
+    List<WarehouseInventory> findByProductIdAndQuantityGreaterThanEqual(
             Integer productId,
             int quantity
     );
 
-    @Modifying
-    @Transactional
+    /**
+     * Atomic stock reservation.
+     * Returns 1 if successful, 0 otherwise.
+     *
+     * IMPORTANT:
+     * - No @Transactional here
+     * - Transaction boundary MUST be in service layer
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE WarehouseInventory wi
         SET wi.quantity = wi.quantity - :qty
@@ -35,15 +45,26 @@ public interface WarehouseInventoryRepository
           AND wi.productId = :productId
           AND wi.quantity >= :qty
     """)
-    int reserveStock(Integer warehouseId, Integer productId, int qty);
+    int reserveStock(
+            Integer warehouseId,
+            Integer productId,
+            int qty
+    );
 
-    @Modifying
-    @Transactional
+    /**
+     * Compensation-only method.
+     * Prefer transaction rollback instead.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE WarehouseInventory wi
         SET wi.quantity = wi.quantity + :qty
         WHERE wi.warehouseId = :warehouseId
           AND wi.productId = :productId
     """)
-    int restoreStock(Integer warehouseId, Integer productId, int qty);
+    int restoreStock(
+            Integer warehouseId,
+            Integer productId,
+            int qty
+    );
 }
