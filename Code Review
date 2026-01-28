@@ -2049,5 +2049,605 @@ public class TrackingController {
 
 
 
+-----------------------------------------------------------------------------------------------------
+Services Updated Mandar
+-------------------------------------------------------------------------------------------------------
+InventoryService
+-------------------------------------------------------------------------------------------------------
+
+package cdac.project.logigraph.inventory.service;
+
+import cdac.project.logigraph.inventory.entity.WarehouseInventory;
+import cdac.project.logigraph.inventory.repository.WarehouseInventoryRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+
+@Service
+public class InventoryService {
+
+    private final WarehouseInventoryRepository inventoryRepository;
+
+    public InventoryService(WarehouseInventoryRepository inventoryRepository) {
+        this.inventoryRepository = inventoryRepository;
+    }
+
+    public Set<Integer> findWarehousesThatCanFulfillAllItems(
+            Map<Integer, Integer> items
+    ) {
+        Map<Integer, Integer> warehouseMatchCount = new HashMap<>();
+        int totalItems = items.size();
+
+        for (Map.Entry<Integer, Integer> entry : items.entrySet()) {
+            Integer productId = entry.getKey();
+            int qty = entry.getValue();
+
+            List<WarehouseInventory> inventories =
+                    inventoryRepository
+                            .findByProductIdAndQuantityGreaterThanEqual(
+                                    productId, qty
+                            );
+
+            for (WarehouseInventory inv : inventories) {
+                warehouseMatchCount.merge(
+                        inv.getWarehouseId(), 1, Integer::sum
+                );
+            }
+        }
+
+        Set<Integer> eligible = new HashSet<>();
+        for (Map.Entry<Integer, Integer> entry : warehouseMatchCount.entrySet()) {
+            if (entry.getValue() == totalItems) {
+                eligible.add(entry.getKey());
+            }
+        }
+
+        if (eligible.isEmpty()) {
+            throw new IllegalStateException(
+                    "No warehouse can fulfill all requested items"
+            );
+        }
+
+        return eligible;
+    }
+
+    @Transactional
+    public void reserveInventory(
+            Integer warehouseId,
+            Map<Integer, Integer> items
+    ) {
+        for (Map.Entry<Integer, Integer> entry : items.entrySet()) {
+            int updated =
+                    inventoryRepository.reserveStock(
+                            warehouseId,
+                            entry.getKey(),
+                            entry.getValue()
+                    );
+
+            if (updated != 1) {
+                throw new IllegalStateException(
+                        "Insufficient stock for product " + entry.getKey()
+                );
+            }
+        }
+    }
+}
+
+-----------------------------------------------------------------------------------------------------
+OrderPlacementService
+-----------------------------------------------------------------------------------------------------
+
+package cdac.project.logigraph.order.service;
+
+import cdac.project.logigraph.inventory.service.InventoryService;
+import cdac.project.logigraph.order.dto.PlaceOrderRequest;
+import cdac.project.logigraph.order.entity.Order;
+import cdac.project.logigraph.order.entity.OrderItem;
+import cdac.project.logigraph.order.entity.OrderStatusHistory;
+import cdac.project.logigraph.order.enums.OrderStatus;
+import cdac.project.logigraph.order.repository.*;
+import cdac.project.logigraph.routing.service.RoutingService;
+import cdac.project.logigraph.vehicle.service.VehicleAssignmentService;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.time.Instant;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+@Service
+public class OrderPlacementService {
+
+    private final InventoryService inventoryService;
+    private final RoutingService routingService;
+    private final VehicleAssignmentService vehicleAssignmentService;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final OrderStatusHistoryRepository statusHistoryRepository;
+
+    public OrderPlacementService(
+            InventoryService inventoryService,
+            RoutingService routingService,
+            VehicleAssignmentService vehicleAssignmentService,
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            OrderStatusHistoryRepository statusHistoryRepository
+    ) {
+        this.inventoryService = inventoryService;
+        this.routingService = routingService;
+        this.vehicleAssignmentService = vehicleAssignmentService;
+        this.orderRepository = orderRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+    }
+
+    @Transactional
+    public Order placeOrder(
+            Integer customerId,
+            PlaceOrderRequest request
+    ) {
+        Set<Integer> eligibleWarehouses =
+                inventoryService.findWarehousesThatCanFulfillAllItems(
+                        request.getItems()
+                );
+
+        Integer warehouseId =
+                routingService.selectNearestWarehouse(
+                        eligibleWarehouses,
+                        request.getDestLat(),
+                        request.getDestLng()
+                );
+
+        Order order = new Order();
+        order.setTrackingId("LG-" + UUID.randomUUID().toString().substring(0, 8));
+        order.setCustomerId(customerId);
+        order.setFulfillmentWarehouseId(warehouseId);
+        order.setStatus(OrderStatus.PLACED);
+        order.setDestLat(request.getDestLat());
+        order.setDestLng(request.getDestLng());
+
+        order = orderRepository.save(order);
+
+        for (Map.Entry<Integer, Integer> entry : request.getItems().entrySet()) {
+            OrderItem item = new OrderItem();
+            item.setOrderId(order.getId());
+            item.setProductId(entry.getKey());
+            item.setQuantity(entry.getValue());
+            orderItemRepository.save(item);
+        }
+
+        inventoryService.reserveInventory(
+                warehouseId,
+                request.getItems()
+        );
+
+        OrderStatusHistory history = new OrderStatusHistory();
+        history.setOrderId(order.getId());
+        history.setStatus(OrderStatus.PLACED);
+        history.setTimestamp(Instant.now());
+        statusHistoryRepository.save(history);
+
+        Integer orderId = order.getId();
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        vehicleAssignmentService.assignVehicle(orderId);
+                    }
+                }
+        );
+
+        return order;
+    }
+}
+-----------------------------------------------------------------------------------------------------
+VehicleAssignmentService
+-----------------------------------------------------------------------------------------------------
+
+package cdac.project.logigraph.vehicle.service;
+
+import cdac.project.logigraph.order.entity.Order;
+import cdac.project.logigraph.order.entity.OrderStatusHistory;
+import cdac.project.logigraph.order.enums.OrderStatus;
+import cdac.project.logigraph.order.repository.*;
+import cdac.project.logigraph.vehicle.entity.Vehicle;
+import cdac.project.logigraph.vehicle.enums.VehicleStatus;
+import cdac.project.logigraph.vehicle.repository.VehicleRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.Optional;
+
+@Service
+public class VehicleAssignmentService {
+
+    private final VehicleRepository vehicleRepository;
+    private final OrderRepository orderRepository;
+    private final OrderStatusHistoryRepository statusHistoryRepository;
+
+    public VehicleAssignmentService(
+            VehicleRepository vehicleRepository,
+            OrderRepository orderRepository,
+            OrderStatusHistoryRepository statusHistoryRepository
+    ) {
+        this.vehicleRepository = vehicleRepository;
+        this.orderRepository = orderRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+    }
+
+    @Transactional
+    public void assignVehicle(Integer orderId) {
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow();
+
+        if (order.getAssignedVehicleId() != null) {
+            return;
+        }
+
+        Optional<Vehicle> vehicleOpt =
+                vehicleRepository.findFirstIdleVehicleForUpdate();
+
+        if (vehicleOpt.isEmpty()) {
+            return;
+        }
+
+        Vehicle vehicle = vehicleOpt.get();
+        vehicle.setStatus(VehicleStatus.ASSIGNED);
+        vehicleRepository.save(vehicle);
+
+        order.setAssignedVehicleId(vehicle.getId());
+        order.setStatus(OrderStatus.ASSIGNED);
+        orderRepository.save(order);
+
+        OrderStatusHistory history = new OrderStatusHistory();
+        history.setOrderId(orderId);
+        history.setStatus(OrderStatus.ASSIGNED);
+        history.setTimestamp(Instant.now());
+        statusHistoryRepository.save(history);
+    }
+}
+-----------------------------------------------------------------------------------------------------
+Routing – Graph Layer
+-----------------------------------------------------------------------------------------------------
+
+-----------------------------------------------------------------------------------------------------
+GraphNode
+-----------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.routing.graph;
+
+import java.util.*;
+
+public class GraphNode {
+
+    private final Integer warehouseId;
+    private final List<GraphEdge> edges = new ArrayList<>();
+
+    public GraphNode(Integer warehouseId) {
+        if (warehouseId == null) {
+            throw new IllegalArgumentException("warehouseId cannot be null");
+        }
+        this.warehouseId = warehouseId;
+    }
+
+    public Integer getWarehouseId() {
+        return warehouseId;
+    }
+
+    public List<GraphEdge> getEdges() {
+        return Collections.unmodifiableList(edges);
+    }
+
+    void addEdge(GraphEdge edge) {
+        edges.add(edge);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return o instanceof GraphNode &&
+               warehouseId.equals(((GraphNode) o).warehouseId);
+    }
+
+    @Override
+    public int hashCode() {
+        return warehouseId.hashCode();
+    }
+}
+-----------------------------------------------------------------------------------------------------
+GraphEdge
+-----------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.routing.graph;
+
+public class GraphEdge {
+
+    private final Integer targetWarehouseId;
+    private final int weight;
+
+    public GraphEdge(Integer targetWarehouseId, int weight) {
+        if (targetWarehouseId == null || weight <= 0) {
+            throw new IllegalArgumentException("Invalid edge");
+        }
+        this.targetWarehouseId = targetWarehouseId;
+        this.weight = weight;
+    }
+
+    public Integer getTargetWarehouseId() {
+        return targetWarehouseId;
+    }
+
+    public int getWeight() {
+        return weight;
+    }
+}
+-----------------------------------------------------------------------------------------------------
+GraphBuilder
+-----------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.routing.graph;
+
+import cdac.project.logigraph.routing.entity.Route;
+import cdac.project.logigraph.routing.repository.RouteRepository;
+import org.springframework.stereotype.Component;
+
+import java.util.*;
+
+@Component
+public class GraphBuilder {
+
+    private final RouteRepository routeRepository;
+    private volatile Map<Integer, GraphNode> cachedGraph;
+
+    public GraphBuilder(RouteRepository routeRepository) {
+        this.routeRepository = routeRepository;
+    }
+
+    public Map<Integer, GraphNode> buildGraph() {
+        if (cachedGraph != null) return cachedGraph;
+
+        synchronized (this) {
+            if (cachedGraph == null) {
+                cachedGraph = Collections.unmodifiableMap(buildInternal());
+            }
+        }
+        return cachedGraph;
+    }
+
+    private Map<Integer, GraphNode> buildInternal() {
+        Map<Integer, GraphNode> graph = new HashMap<>();
+        for (Route route : routeRepository.findByIsActiveTrue()) {
+            if (route.getBaseTimeMins() <= 0) continue;
+
+            graph.putIfAbsent(
+                    route.getSourceWarehouseId(),
+                    new GraphNode(route.getSourceWarehouseId())
+            );
+            graph.putIfAbsent(
+                    route.getDestinationWarehouseId(),
+                    new GraphNode(route.getDestinationWarehouseId())
+            );
+
+            graph.get(route.getSourceWarehouseId())
+                    .addEdge(new GraphEdge(
+                            route.getDestinationWarehouseId(),
+                            route.getBaseTimeMins()
+                    ));
+        }
+        return graph;
+    }
+}
+-----------------------------------------------------------------------------------------------------
+Routing – Dijkstra Algorithm
+-----------------------------------------------------------------------------------------------------
+
+
+-----------------------------------------------------------------------------------------------------
+DijkstraEngine
+-----------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.routing.algorithm;
+
+import cdac.project.logigraph.routing.graph.*;
+
+import java.util.*;
+
+public class DijkstraEngine {
+
+    public DijkstraResult shortestPaths(
+            Map<Integer, GraphNode> graph,
+            Integer source
+    ) {
+        Map<Integer, Long> dist = new HashMap<>();
+        Map<Integer, Integer> prev = new HashMap<>();
+        PriorityQueue<long[]> pq =
+                new PriorityQueue<>(Comparator.comparingLong(a -> a[1]));
+
+        pq.add(new long[]{source, 0});
+        dist.put(source, 0L);
+
+        while (!pq.isEmpty()) {
+            long[] cur = pq.poll();
+            int node = (int) cur[0];
+
+            for (GraphEdge edge : graph.get(node).getEdges()) {
+                long nd = dist.get(node) + edge.getWeight();
+                if (nd < dist.getOrDefault(edge.getTargetWarehouseId(), Long.MAX_VALUE)) {
+                    dist.put(edge.getTargetWarehouseId(), nd);
+                    prev.put(edge.getTargetWarehouseId(), node);
+                    pq.add(new long[]{edge.getTargetWarehouseId(), nd});
+                }
+            }
+        }
+        return new DijkstraResult(dist, prev);
+    }
+}
+-----------------------------------------------------------------------------------------------------
+DijkstraResult
+-----------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.routing.algorithm;
+
+import java.util.*;
+
+public class DijkstraResult {
+
+    private final Map<Integer, Long> distances;
+    private final Map<Integer, Integer> previous;
+
+    public DijkstraResult(
+            Map<Integer, Long> distances,
+            Map<Integer, Integer> previous
+    ) {
+        this.distances = Collections.unmodifiableMap(distances);
+        this.previous = Collections.unmodifiableMap(previous);
+    }
+
+    public Map<Integer, Long> getDistances() {
+        return distances;
+    }
+
+    public Map<Integer, Integer> getPrevious() {
+        return previous;
+    }
+}
+-----------------------------------------------------------------------------------------------------
+RoutingService
+-----------------------------------------------------------------------------------------------------
+
+package cdac.project.logigraph.routing.service;
+
+import cdac.project.logigraph.routing.algorithm.*;
+import cdac.project.logigraph.routing.entity.Warehouse;
+import cdac.project.logigraph.routing.graph.*;
+import cdac.project.logigraph.routing.repository.WarehouseRepository;
+import org.springframework.stereotype.Service;
+
+import java.util.Map;
+import java.util.Set;
+
+@Service
+public class RoutingService {
+
+    private final GraphBuilder graphBuilder;
+    private final DijkstraEngine dijkstraEngine;
+    private final WarehouseRepository warehouseRepository;
+
+    public RoutingService(
+            GraphBuilder graphBuilder,
+            DijkstraEngine dijkstraEngine,
+            WarehouseRepository warehouseRepository
+    ) {
+        this.graphBuilder = graphBuilder;
+        this.dijkstraEngine = dijkstraEngine;
+        this.warehouseRepository = warehouseRepository;
+    }
+
+    public Integer selectNearestWarehouse(
+            Set<Integer> eligibleWarehouses,
+            double destLat,
+            double destLng
+    ) {
+
+        Map<Integer, GraphNode> graph = graphBuilder.buildGraph();
+        long best = Long.MAX_VALUE;
+        Integer bestWarehouse = null;
+
+        for (Integer wid : eligibleWarehouses) {
+            if (!graph.containsKey(wid)) continue;
+
+            DijkstraResult result =
+                    dijkstraEngine.shortestPaths(graph, wid);
+
+            Warehouse w = warehouseRepository.findById(wid).orElseThrow();
+
+            double km = haversine(
+                    w.getLatitude(), w.getLongitude(),
+                    destLat, destLng
+            );
+
+            long minutes = (long) ((km / 40) * 60);
+            long total = minutes;
+
+            if (total < best) {
+                best = total;
+                bestWarehouse = wid;
+            }
+        }
+        return bestWarehouse;
+    }
+
+    private double haversine(
+            double lat1, double lon1,
+            double lat2, double lon2
+    ) {
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                        + Math.cos(Math.toRadians(lat1))
+                        * Math.cos(Math.toRadians(lat2))
+                        * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+}
+-----------------------------------------------------------------------------------------------------
+VehicleRepository
+-----------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.vehicle.repository;
+
+import cdac.project.logigraph.vehicle.entity.Vehicle;
+import cdac.project.logigraph.vehicle.enums.VehicleStatus;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import jakarta.persistence.LockModeType;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
+
+    /**
+     * Used for dashboards, admin views, monitoring.
+     */
+    List<Vehicle> findByStatus(VehicleStatus status);
+
+    /**
+     * Fetch ONE idle vehicle with a pessimistic write lock.
+     *
+     * WHY THIS EXISTS:
+     * - Prevents two transactions from assigning the same vehicle
+     * - Required for production concurrency safety
+     *
+     * MUST be called inside a @Transactional service method.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT v
+        FROM Vehicle v
+        WHERE v.status = cdac.project.logigraph.vehicle.enums.VehicleStatus.IDLE
+        ORDER BY v.id
+    """)
+    Optional<Vehicle> findFirstIdleVehicleForUpdate();
+}
+-----------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
