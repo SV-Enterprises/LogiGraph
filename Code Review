@@ -1811,9 +1811,241 @@ public class RoutingServiceImpl implements RoutingService {
 }
 ----------------------------------------------------------------------------------------------------------
 
+<-- CONTROLLER --> [Anushka Chourasia]
+controller
+├── auth
+│    └── AuthController.java         
+├── admin
+│    ├── WarehouseAdminController.java
+│    ├── ProductAdminController.java
+│    └── VehicleAdminController.java
+├── customer
+│    ├── OrderController.java
+│    └── TrackingController.java
+└── publicapi
+     └── WarehouseController.java
 
+----------------------------------------------------------------------------------------------------------
+WarehouseController
+----------------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.inventory.controller;
 
+import java.util.List;
 
+import org.springframework.web.bind.annotation.*;
+
+import cdac.project.logigraph.inventory.entity.Warehouse;
+import cdac.project.logigraph.inventory.service.WarehouseService;
+
+@RestController
+@RequestMapping("/api/warehouses")
+public class WarehouseController {
+
+    private final WarehouseService warehouseService;
+
+    public WarehouseController(WarehouseService warehouseService) {
+        this.warehouseService = warehouseService;
+    }
+
+    @GetMapping
+    public List<Warehouse> getAllWarehouses() {
+        return warehouseService.getAllWarehouses();
+    }
+
+    @GetMapping("/{id}")
+    public Warehouse getWarehouse(@PathVariable Integer id) {
+        return warehouseService.getWarehouseById(id);
+    }
+}
+
+----------------------------------------------------------------------------------------------------------
+ProductAdminController
+----------------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.catalog.controller;
+
+import java.util.List;
+
+import org.springframework.web.bind.annotation.*;
+
+import cdac.project.logigraph.catalog.entity.Product;
+import cdac.project.logigraph.catalog.repository.ProductRepository;
+
+@RestController
+@RequestMapping("/api/admin/products")
+public class ProductAdminController {
+
+    private final ProductRepository productRepository;
+
+    public ProductAdminController(ProductRepository productRepository) {
+        this.productRepository = productRepository;
+    }
+
+    @PostMapping
+    public Product createProduct(@RequestBody Product product) {
+        return productRepository.save(product);
+    }
+
+    @GetMapping
+    public List<Product> getAllProducts() {
+        return productRepository.findAll();
+    }
+}
+
+----------------------------------------------------------------------------------------------------------
+WarehouseAdminController
+----------------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.inventory.controller;
+
+import java.util.List;
+
+import org.springframework.web.bind.annotation.*;
+
+import cdac.project.logigraph.inventory.entity.Warehouse;
+import cdac.project.logigraph.inventory.repository.WarehouseRepository;
+
+@RestController
+@RequestMapping("/api/admin/warehouses")
+public class WarehouseAdminController {
+
+    private final WarehouseRepository warehouseRepository;
+
+    public WarehouseAdminController(WarehouseRepository warehouseRepository) {
+        this.warehouseRepository = warehouseRepository;
+    }
+
+    @PostMapping
+    public Warehouse createWarehouse(@RequestBody Warehouse warehouse) {
+        return warehouseRepository.save(warehouse);
+    }
+
+    @GetMapping
+    public List<Warehouse> getAllWarehouses() {
+        return warehouseRepository.findAll();
+    }
+}
+
+----------------------------------------------------------------------------------------------------------
+VehicleAdminController
+----------------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.vehicle.controller;
+
+import java.util.List;
+
+import org.springframework.web.bind.annotation.*;
+
+import cdac.project.logigraph.vehicle.entity.Vehicle;
+import cdac.project.logigraph.vehicle.repository.VehicleRepository;
+
+@RestController
+@RequestMapping("/api/admin/vehicles")
+public class VehicleAdminController {
+
+    private final VehicleRepository vehicleRepository;
+
+    public VehicleAdminController(VehicleRepository vehicleRepository) {
+        this.vehicleRepository = vehicleRepository;
+    }
+
+    @PostMapping
+    public Vehicle addVehicle(@RequestBody Vehicle vehicle) {
+        return vehicleRepository.save(vehicle);
+    }
+
+    @GetMapping
+    public List<Vehicle> getAllVehicles() {
+        return vehicleRepository.findAll();
+    }
+}
+
+----------------------------------------------------------------------------------------------------------
+OrderController
+----------------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.order.controller;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import cdac.project.logigraph.order.entity.Order;
+import cdac.project.logigraph.order.service.OrderService;
+
+@RestController
+@RequestMapping("/api/customer/orders")
+public class OrderController {
+
+    private final OrderService orderService;
+
+    public OrderController(OrderService orderService) {
+        this.orderService = orderService;
+    }
+
+    @PostMapping
+    public ResponseEntity<Order> placeOrder(
+            @RequestParam Integer customerId,
+            @RequestParam Integer productId,
+            @RequestParam int quantity,
+            @RequestParam double destLat,
+            @RequestParam double destLng
+    ) {
+
+        Order order = orderService.placeOrder(
+                customerId,
+                productId,
+                quantity,
+                destLat,
+                destLng
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(order);
+    }
+}
+
+---------------------------------------------------------------------------------------------------------
+TrackingController
+---------------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.order.controller;
+
+import java.util.List;
+
+import org.springframework.web.bind.annotation.*;
+
+import cdac.project.logigraph.order.entity.Order;
+import cdac.project.logigraph.order.entity.OrderStatusHistory;
+import cdac.project.logigraph.order.repository.OrderRepository;
+import cdac.project.logigraph.order.repository.OrderStatusHistoryRepository;
+
+@RestController
+@RequestMapping("/api/orders")
+public class TrackingController {
+
+    private final OrderRepository orderRepository;
+    private final OrderStatusHistoryRepository historyRepository;
+
+    public TrackingController(
+            OrderRepository orderRepository,
+            OrderStatusHistoryRepository historyRepository
+    ) {
+        this.orderRepository = orderRepository;
+        this.historyRepository = historyRepository;
+    }
+
+    @GetMapping("/{trackingId}")
+    public Order getOrderByTrackingId(@PathVariable String trackingId) {
+        return orderRepository.findByTrackingId(trackingId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Invalid tracking ID"));
+    }
+
+    @GetMapping("/{orderId}/history")
+    public List<OrderStatusHistory> getOrderHistory(
+            @PathVariable Integer orderId
+    ) {
+        return historyRepository
+                .findByOrderIdOrderByChangedAtAsc(orderId);
+    }
+}
 
 
 
