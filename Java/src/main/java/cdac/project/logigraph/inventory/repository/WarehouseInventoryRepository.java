@@ -30,12 +30,48 @@ public interface WarehouseInventoryRepository
     );
 
     /**
-     * Atomic stock reservation.
+     * Read inventory for a single warehouse (reporting only).
+     */
+    List<WarehouseInventory> findByWarehouseId(Integer warehouseId);
+
+    /**
+     * Atomic increment for stock addition.
+     * Used by InventoryManagementService.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE WarehouseInventory wi
+        SET wi.quantity = wi.quantity + :qty
+        WHERE wi.warehouseId = :warehouseId
+          AND wi.productId = :productId
+    """)
+    int incrementStock(
+            Integer warehouseId,
+            Integer productId,
+            int qty
+    );
+
+    /**
+     * Atomic adjustment (positive or negative).
+     * Prevents negative stock.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE WarehouseInventory wi
+        SET wi.quantity = wi.quantity + :delta
+        WHERE wi.warehouseId = :warehouseId
+          AND wi.productId = :productId
+          AND wi.quantity + :delta >= 0
+    """)
+    int adjustStock(
+            Integer warehouseId,
+            Integer productId,
+            int delta
+    );
+
+    /**
+     * Atomic stock reservation for orders.
      * Returns 1 if successful, 0 otherwise.
-     *
-     * IMPORTANT:
-     * - No @Transactional here
-     * - Transaction boundary MUST be in service layer
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""

@@ -19,8 +19,17 @@ public class Warehouse {
     @Column(nullable = false)
     private double longitude;
 
-    @Column
+    @Column(length = 255)
     private String address;
+
+    /**
+     * Controls whether warehouse can be used
+     * for routing and order fulfillment.
+     */
+    @Column(nullable = false)
+    private Boolean active;
+
+    // ---------------- GETTERS ----------------
 
     public Integer getId() {
         return id;
@@ -42,6 +51,12 @@ public class Warehouse {
         return address;
     }
 
+    public Boolean getActive() {
+        return active;
+    }
+
+    // ---------------- SETTERS ----------------
+
     public void setName(String name) {
         this.name = name;
     }
@@ -56,5 +71,9 @@ public class Warehouse {
 
     public void setAddress(String address) {
         this.address = address;
+    }
+
+    public void setActive(Boolean active) {
+        this.active = active;
     }
 }
