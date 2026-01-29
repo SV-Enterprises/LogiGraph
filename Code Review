@@ -3749,6 +3749,460 @@ public class WarehouseResponse {
 }
 
 
+----------------------------------------------------------------------------------------------------------------------------------------
+INVENTORY MANAGEMENT
+----------------------------------------------------------------------------------------------------------------------------------------
+
+AddInventoryRequest
+
+package cdac.project.logigraph.inventory.dto;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+
+public class AddInventoryRequest {
+
+    @NotNull(message = "Warehouse ID is required")
+    private Integer warehouseId;
+
+    @NotNull(message = "Product ID is required")
+    private Integer productId;
+
+    @NotNull(message = "Quantity is required")
+    @Positive(message = "Quantity must be greater than zero")
+    private Integer quantity;
+
+    public Integer getWarehouseId() {
+        return warehouseId;
+    }
+
+    public Integer getProductId() {
+        return productId;
+    }
+
+    public Integer getQuantity() {
+        return quantity;
+    }
+}
+
+--------------------------------------------------------------------------------------------
+
+AddInventoryRequest
+
+package cdac.project.logigraph.inventory.dto;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotZero;
+
+public class AdjustInventoryRequest {
+
+    @NotNull(message = "Warehouse ID is required")
+    private Integer warehouseId;
+
+    @NotNull(message = "Product ID is required")
+    private Integer productId;
+
+    /**
+     * Can be positive (add) or negative (reduce).
+     * Zero is not allowed.
+     */
+    @NotNull(message = "Delta is required")
+    @NotZero(message = "Delta must not be zero")
+    private Integer delta;
+
+    public Integer getWarehouseId() {
+        return warehouseId;
+    }
+
+    public Integer getProductId() {
+        return productId;
+    }
+
+    public Integer getDelta() {
+        return delta;
+    }
+}
+--------------------------------------------------------------------------------------------
+
+AdjustInventoryRequest
+
+package cdac.project.logigraph.inventory.dto;
+
+import jakarta.validation.constraints.NotNull;
+
+public class AdjustInventoryRequest {
+
+    @NotNull
+    private Integer warehouseId;
+
+    @NotNull
+    private Integer productId;
+
+    /**
+     * Can be positive (add) or negative (reduce).
+     * Reduction must not cause negative stock.
+     */
+    private Integer delta;
+
+    public Integer getWarehouseId() {
+        return warehouseId;
+    }
+
+    public Integer getProductId() {
+        return productId;
+    }
+
+    public Integer getDelta() {
+        return delta;
+    }
+}
+--------------------------------------------------------------------------------------------
+WarehouseInventoryView
+
+package cdac.project.logigraph.inventory.dto;
+
+public class WarehouseInventoryView {
+
+    private final Integer warehouseId;
+    private final Integer productId;
+    private final int quantity;
+
+    public WarehouseInventoryView(
+            Integer warehouseId,
+            Integer productId,
+            int quantity
+    ) {
+        this.warehouseId = warehouseId;
+        this.productId = productId;
+        this.quantity = quantity;
+    }
+
+    public Integer getWarehouseId() {
+        return warehouseId;
+    }
+
+    public Integer getProductId() {
+        return productId;
+    }
+
+    public int getQuantity() {
+        return quantity;
+    }
+}
+--------------------------------------------------------------------------------------------
+
+InventoryManagementService
+
+package cdac.project.logigraph.inventory.service;
+
+import cdac.project.logigraph.inventory.dto.WarehouseInventoryView;
+import cdac.project.logigraph.inventory.entity.WarehouseInventory;
+import cdac.project.logigraph.inventory.repository.WarehouseInventoryRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class InventoryManagementService {
+
+    private final WarehouseInventoryRepository inventoryRepository;
+
+    public InventoryManagementService(
+            WarehouseInventoryRepository inventoryRepository
+    ) {
+        this.inventoryRepository = inventoryRepository;
+    }
+
+    /**
+     * Add stock to a warehouse-product pair.
+     * If record exists → atomic increment.
+     * If not → create new record.
+     */
+    @Transactional
+    public void addStock(
+            Integer warehouseId,
+            Integer productId,
+            int quantity
+    ) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException(
+                    "Quantity must be greater than zero"
+            );
+        }
+
+        int updated =
+                inventoryRepository.incrementStock(
+                        warehouseId,
+                        productId,
+                        quantity
+                );
+
+        // If no row was updated, create new inventory record
+        if (updated == 0) {
+            WarehouseInventory inventory = new WarehouseInventory();
+            inventory.setWarehouseId(warehouseId);
+            inventory.setProductId(productId);
+            inventory.setQuantity(quantity);
+            inventoryRepository.save(inventory);
+        }
+    }
+
+    /**
+     * Adjust stock positively or negatively.
+     * Adjustment is atomic and cannot result in negative stock.
+     */
+    @Transactional
+    public void adjustStock(
+            Integer warehouseId,
+            Integer productId,
+            int delta
+    ) {
+        if (delta == 0) {
+            throw new IllegalArgumentException(
+                    "Delta must not be zero"
+            );
+        }
+
+        int updated =
+                inventoryRepository.adjustStock(
+                        warehouseId,
+                        productId,
+                        delta
+                );
+
+        if (updated == 0) {
+            throw new IllegalStateException(
+                    "Inventory adjustment failed or insufficient stock"
+            );
+        }
+    }
+
+    /**
+     * Read-only inventory view for a specific warehouse.
+     */
+    @Transactional(readOnly = true)
+    public List<WarehouseInventoryView> getInventoryForWarehouse(
+            Integer warehouseId
+    ) {
+        return inventoryRepository
+                .findByWarehouseId(warehouseId)
+                .stream()
+                .map(inv ->
+                        new WarehouseInventoryView(
+                                inv.getWarehouseId(),
+                                inv.getProductId(),
+                                inv.getQuantity()
+                        )
+                )
+                .collect(Collectors.toList());
+    }
+}
+
+
+-----------------------------------------------------------------------------------------------
+updated WarehouseInventoryRepository
+
+package cdac.project.logigraph.inventory.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import cdac.project.logigraph.inventory.entity.WarehouseInventory;
+import cdac.project.logigraph.inventory.entity.WarehouseInventoryId;
+
+@Repository
+public interface WarehouseInventoryRepository
+        extends JpaRepository<WarehouseInventory, WarehouseInventoryId> {
+
+    Optional<WarehouseInventory> findByWarehouseIdAndProductId(
+            Integer warehouseId,
+            Integer productId
+    );
+
+    /**
+     * Used ONLY for candidate warehouse discovery.
+     * Do NOT use this for final stock reservation.
+     */
+    List<WarehouseInventory> findByProductIdAndQuantityGreaterThanEqual(
+            Integer productId,
+            int quantity
+    );
+
+    /**
+     * Read inventory for a single warehouse (reporting only).
+     */
+    List<WarehouseInventory> findByWarehouseId(Integer warehouseId);
+
+    /**
+     * Atomic increment for stock addition.
+     * Used by InventoryManagementService.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE WarehouseInventory wi
+        SET wi.quantity = wi.quantity + :qty
+        WHERE wi.warehouseId = :warehouseId
+          AND wi.productId = :productId
+    """)
+    int incrementStock(
+            Integer warehouseId,
+            Integer productId,
+            int qty
+    );
+
+    /**
+     * Atomic adjustment (positive or negative).
+     * Prevents negative stock.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE WarehouseInventory wi
+        SET wi.quantity = wi.quantity + :delta
+        WHERE wi.warehouseId = :warehouseId
+          AND wi.productId = :productId
+          AND wi.quantity + :delta >= 0
+    """)
+    int adjustStock(
+            Integer warehouseId,
+            Integer productId,
+            int delta
+    );
+
+    /**
+     * Atomic stock reservation for orders.
+     * Returns 1 if successful, 0 otherwise.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE WarehouseInventory wi
+        SET wi.quantity = wi.quantity - :qty
+        WHERE wi.warehouseId = :warehouseId
+          AND wi.productId = :productId
+          AND wi.quantity >= :qty
+    """)
+    int reserveStock(
+            Integer warehouseId,
+            Integer productId,
+            int qty
+    );
+
+    /**
+     * Compensation-only method.
+     * Prefer transaction rollback instead.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE WarehouseInventory wi
+        SET wi.quantity = wi.quantity + :qty
+        WHERE wi.warehouseId = :warehouseId
+          AND wi.productId = :productId
+    """)
+    int restoreStock(
+            Integer warehouseId,
+            Integer productId,
+            int qty
+    );
+}
+-----------------------------------------------------------------------------------------------
+
+InventoryController
+
+package cdac.project.logigraph.inventory.controller;
+
+import cdac.project.logigraph.inventory.dto.AddInventoryRequest;
+import cdac.project.logigraph.inventory.dto.AdjustInventoryRequest;
+import cdac.project.logigraph.inventory.dto.WarehouseInventoryView;
+import cdac.project.logigraph.inventory.service.InventoryManagementService;
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/inventory")
+public class InventoryController {
+
+    private final InventoryManagementService inventoryService;
+
+    public InventoryController(
+            InventoryManagementService inventoryService
+    ) {
+        this.inventoryService = inventoryService;
+    }
+
+    /**
+     * ADMIN / MANAGER
+     * Add stock to a warehouse-product pair.
+     *
+     * HTTP 201 CREATED
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PostMapping("/manager/add")
+    public ResponseEntity<Void> addStock(
+            @Valid @RequestBody AddInventoryRequest request
+    ) {
+        inventoryService.addStock(
+                request.getWarehouseId(),
+                request.getProductId(),
+                request.getQuantity()
+        );
+
+        return ResponseEntity.status(201).build();
+    }
+
+    /**
+     * ADMIN / MANAGER
+     * Adjust stock positively or negatively.
+     *
+     * HTTP 204 NO CONTENT
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PostMapping("/manager/adjust")
+    public ResponseEntity<Void> adjustStock(
+            @Valid @RequestBody AdjustInventoryRequest request
+    ) {
+        inventoryService.adjustStock(
+                request.getWarehouseId(),
+                request.getProductId(),
+                request.getDelta()
+        );
+
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * ADMIN / MANAGER
+     * View inventory of a specific warehouse.
+     *
+     * HTTP 200 OK
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @GetMapping("/manager/warehouse/{warehouseId}")
+    public ResponseEntity<List<WarehouseInventoryView>> getInventory(
+            @PathVariable Integer warehouseId
+    ) {
+        return ResponseEntity.ok(
+                inventoryService.getInventoryForWarehouse(warehouseId)
+        );
+    }
+}
+
+
+
+
+
+
+
+
 
 
 
