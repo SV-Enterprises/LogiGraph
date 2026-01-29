@@ -3416,6 +3416,340 @@ public class VehicleAssignmentService {
 
 
 
+-----------------------------------------------------------------------------------------
+WAREHOUSE MANAGEMENT
+-----------------------------------------------------------------------------------------
+
+
+-----------------------------------------------------------------------------------------
+CreateWarehouseRequest (DTO)
+
+package cdac.project.logigraph.inventory.dto;
+
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+public class CreateWarehouseRequest {
+
+    @NotBlank(message = "Warehouse name is required")
+    @Size(max = 100, message = "Warehouse name must not exceed 100 characters")
+    private String name;
+
+    @NotNull(message = "Latitude is required")
+    @DecimalMin(value = "-90.0", message = "Latitude must be >= -90")
+    @DecimalMax(value = "90.0", message = "Latitude must be <= 90")
+    private Double latitude;
+
+    @NotNull(message = "Longitude is required")
+    @DecimalMin(value = "-180.0", message = "Longitude must be >= -180")
+    @DecimalMax(value = "180.0", message = "Longitude must be <= 180")
+    private Double longitude;
+
+    @Size(max = 255, message = "Address must not exceed 255 characters")
+    private String address;
+
+    public String getName() {
+        return name;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+}
+-----------------------------------------------------------------------------------------
+
+
+UpdateWarehouseRequest
+
+package cdac.project.logigraph.inventory.dto;
+
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Size;
+
+public class UpdateWarehouseRequest {
+
+    @Size(max = 100, message = "Warehouse name must not exceed 100 characters")
+    private String name;
+
+    @DecimalMin(value = "-90.0", message = "Latitude must be >= -90")
+    @DecimalMax(value = "90.0", message = "Latitude must be <= 90")
+    private Double latitude;
+
+    @DecimalMin(value = "-180.0", message = "Longitude must be >= -180")
+    @DecimalMax(value = "180.0", message = "Longitude must be <= 180")
+    private Double longitude;
+
+    @Size(max = 255, message = "Address must not exceed 255 characters")
+    private String address;
+
+    /**
+     * Controls whether warehouse can be used for routing & fulfillment.
+     */
+    private Boolean active;
+
+    public String getName() {
+        return name;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public Boolean getActive() {
+        return active;
+    }
+}
+
+-----------------------------------------------------------------------------------------
+
+WarehouseService
+
+package cdac.project.logigraph.inventory.service;
+
+import cdac.project.logigraph.inventory.dto.CreateWarehouseRequest;
+import cdac.project.logigraph.inventory.dto.UpdateWarehouseRequest;
+import cdac.project.logigraph.inventory.entity.Warehouse;
+import cdac.project.logigraph.inventory.repository.WarehouseRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+public class WarehouseService {
+
+    private final WarehouseRepository warehouseRepository;
+
+    public WarehouseService(WarehouseRepository warehouseRepository) {
+        this.warehouseRepository = warehouseRepository;
+    }
+
+    @Transactional
+    public Warehouse createWarehouse(CreateWarehouseRequest request) {
+
+        Warehouse warehouse = new Warehouse();
+        warehouse.setName(request.getName());
+        warehouse.setLatitude(request.getLatitude());
+        warehouse.setLongitude(request.getLongitude());
+        warehouse.setAddress(request.getAddress());
+        warehouse.setActive(true);
+
+        return warehouseRepository.save(warehouse);
+    }
+
+    @Transactional
+    public Warehouse updateWarehouse(
+            Integer warehouseId,
+            UpdateWarehouseRequest request
+    ) {
+
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "Warehouse not found: " + warehouseId
+                        )
+                );
+
+        if (request.getName() != null) {
+            warehouse.setName(request.getName());
+        }
+        if (request.getLatitude() != null) {
+            warehouse.setLatitude(request.getLatitude());
+        }
+        if (request.getLongitude() != null) {
+            warehouse.setLongitude(request.getLongitude());
+        }
+        if (request.getAddress() != null) {
+            warehouse.setAddress(request.getAddress());
+        }
+        if (request.getActive() != null) {
+            warehouse.setActive(request.getActive());
+        }
+
+        return warehouseRepository.save(warehouse);
+    }
+
+    public List<Warehouse> getAllWarehouses() {
+        return warehouseRepository.findAll();
+    }
+
+    public Warehouse getWarehouse(Integer warehouseId) {
+        return warehouseRepository.findById(warehouseId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "Warehouse not found: " + warehouseId
+                        )
+                );
+    }
+}
+-----------------------------------------------------------------------------------------
+WarehouseController
+
+package cdac.project.logigraph.inventory.controller;
+
+import cdac.project.logigraph.inventory.dto.CreateWarehouseRequest;
+import cdac.project.logigraph.inventory.dto.UpdateWarehouseRequest;
+import cdac.project.logigraph.inventory.dto.WarehouseResponse;
+import cdac.project.logigraph.inventory.entity.Warehouse;
+import cdac.project.logigraph.inventory.service.WarehouseService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/warehouses")
+public class WarehouseController {
+
+    private final WarehouseService warehouseService;
+
+    public WarehouseController(WarehouseService warehouseService) {
+        this.warehouseService = warehouseService;
+    }
+
+    /**
+     * ADMIN: Create warehouse
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/admin")
+    public ResponseEntity<WarehouseResponse> createWarehouse(
+            @Valid @RequestBody CreateWarehouseRequest request
+    ) {
+        Warehouse warehouse = warehouseService.createWarehouse(request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(WarehouseResponse.fromEntity(warehouse));
+    }
+
+    /**
+     * ADMIN: Update warehouse
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/admin/{id}")
+    public ResponseEntity<WarehouseResponse> updateWarehouse(
+            @PathVariable Integer id,
+            @Valid @RequestBody UpdateWarehouseRequest request
+    ) {
+        Warehouse warehouse =
+                warehouseService.updateWarehouse(id, request);
+
+        return ResponseEntity.ok(
+                WarehouseResponse.fromEntity(warehouse)
+        );
+    }
+
+    /**
+     * MANAGER / ADMIN: View all warehouses
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @GetMapping("/manager")
+    public ResponseEntity<List<WarehouseResponse>> getAllWarehouses() {
+
+        List<WarehouseResponse> response =
+                warehouseService.getAllWarehouses()
+                        .stream()
+                        .map(WarehouseResponse::fromEntity)
+                        .collect(Collectors.toList());
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * MANAGER / ADMIN: View single warehouse
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @GetMapping("/manager/{id}")
+    public ResponseEntity<WarehouseResponse> getWarehouse(
+            @PathVariable Integer id
+    ) {
+        Warehouse warehouse =
+                warehouseService.getWarehouse(id);
+
+        return ResponseEntity.ok(
+                WarehouseResponse.fromEntity(warehouse)
+        );
+    }
+}
+-----------------------------------------------------------------------------------------
+WarehouseResponse
+
+package cdac.project.logigraph.inventory.dto;
+
+import cdac.project.logigraph.inventory.entity.Warehouse;
+
+public class WarehouseResponse {
+
+    private Integer id;
+    private String name;
+    private Double latitude;
+    private Double longitude;
+    private String address;
+    private Boolean active;
+
+    public static WarehouseResponse fromEntity(Warehouse warehouse) {
+
+        WarehouseResponse response = new WarehouseResponse();
+        response.id = warehouse.getId();
+        response.name = warehouse.getName();
+        response.latitude = warehouse.getLatitude();
+        response.longitude = warehouse.getLongitude();
+        response.address = warehouse.getAddress();
+        response.active = warehouse.getActive();
+
+        return response;
+    }
+
+    public Integer getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public Boolean getActive() {
+        return active;
+    }
+}
+
+
+
 
 
 
