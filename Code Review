@@ -4240,3 +4240,34 @@ public class Warehouse {
 }
 
 -----------------------------------------------------------------------------------------------------------------------------------------------
+Update of the Database
+-----------------------------------------------------------------------------------------------------------------------------------------------
+
+ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE warehouses
+ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE;
+
+
+
+
+ALTER TABLE vehicles ADD COLUMN home_warehouse_id INT NOT NULL;
+
+-- DO THIS NOW
+ALTER TABLE vehicles
+ADD CONSTRAINT fk_vehicle_home_wh
+FOREIGN KEY (home_warehouse_id)
+REFERENCES warehouses(id)
+ON DELETE RESTRICT
+ON UPDATE CASCADE;
+
+
+-- OPTIONAL (can do now or later)
+ALTER TABLE vehicles
+ADD CONSTRAINT fk_vehicle_current_wh
+FOREIGN KEY (current_warehouse_id)
+REFERENCES warehouses(id)
+ON DELETE SET NULL
+ON UPDATE CASCADE;
+
+
