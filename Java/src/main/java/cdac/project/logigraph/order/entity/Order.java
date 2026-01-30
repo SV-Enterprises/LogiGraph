@@ -3,6 +3,8 @@ package cdac.project.logigraph.order.entity;
 import cdac.project.logigraph.order.enums.OrderStatus;
 import jakarta.persistence.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "orders")
 public class Order {
@@ -32,6 +34,17 @@ public class Order {
 
     @Column(name = "dest_lng", nullable = false)
     private double destLng;
+
+    /* =========================
+       AUDIT FIELD (READ-ONLY)
+       ========================= */
+
+    @Column(name = "created_at", updatable = false, insertable = false)
+    private LocalDateTime createdAt;
+
+    /* =========================
+       GETTERS
+       ========================= */
 
     public Integer getId() {
         return id;
@@ -64,6 +77,14 @@ public class Order {
     public double getDestLng() {
         return destLng;
     }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    /* =========================
+       SETTERS
+       ========================= */
 
     public void setTrackingId(String trackingId) {
         this.trackingId = trackingId;

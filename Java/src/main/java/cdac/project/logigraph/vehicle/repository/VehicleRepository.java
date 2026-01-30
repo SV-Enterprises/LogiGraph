@@ -15,16 +15,25 @@ import jakarta.persistence.LockModeType;
 @Repository
 public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
 
+    /* =========================
+       READ OPERATIONS
+       ========================= */
+
     List<Vehicle> findByStatus(VehicleStatus status);
 
     List<Vehicle> findByStatusIn(List<VehicleStatus> statuses);
 
-    // ✅ ADD THIS LINE
+    long countByStatus(VehicleStatus status); // ✅ REQUIRED FOR DASHBOARD
+
     boolean existsByPlateNumber(String plateNumber);
 
+    /* =========================
+       ASSIGNMENT SAFETY
+       ========================= */
+
     /**
-     * Fetch ONE IDLE vehicle with database-level lock.
-     * Prevents multiple orders from assigning the same vehicle.
+     * Fetch ONE IDLE vehicle with DB-level lock.
+     * Prevents double assignment across concurrent orders.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

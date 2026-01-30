@@ -17,4 +17,16 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     List<Order> findByCustomerId(Integer customerId);
 
     List<Order> findByStatus(OrderStatus status);
+
+    // 🔴 ADD FOR DASHBOARD (READ-ONLY)
+
+    /**
+     * Latest orders for manager overview
+     */
+    List<Order> findTop50ByOrderByCreatedAtDesc();
+
+    /**
+     * Order count per status (dashboard metrics)
+     */
+    long countByStatus(OrderStatus status);
 }
