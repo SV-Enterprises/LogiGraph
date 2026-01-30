@@ -10,7 +10,6 @@ import org.springframework.stereotype.Repository;
 
 import cdac.project.logigraph.vehicle.entity.Vehicle;
 import cdac.project.logigraph.vehicle.enums.VehicleStatus;
-
 import jakarta.persistence.LockModeType;
 
 @Repository
@@ -19,6 +18,9 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
     List<Vehicle> findByStatus(VehicleStatus status);
 
     List<Vehicle> findByStatusIn(List<VehicleStatus> statuses);
+
+    // ✅ ADD THIS LINE
+    boolean existsByPlateNumber(String plateNumber);
 
     /**
      * Fetch ONE IDLE vehicle with database-level lock.

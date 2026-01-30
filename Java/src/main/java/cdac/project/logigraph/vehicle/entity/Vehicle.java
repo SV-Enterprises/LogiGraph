@@ -3,6 +3,8 @@ package cdac.project.logigraph.vehicle.entity;
 import cdac.project.logigraph.vehicle.enums.VehicleStatus;
 import jakarta.persistence.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "vehicles")
 public class Vehicle {
@@ -21,8 +23,27 @@ public class Vehicle {
     @Column(nullable = false, length = 20)
     private VehicleStatus status;
 
+    /**
+     * Permanent base warehouse of the vehicle
+     */
+    @Column(name = "home_warehouse_id", nullable = false)
+    private Integer homeWarehouseId;
+
+    /**
+     * Dynamic current warehouse (changes during routing)
+     */
     @Column(name = "current_warehouse_id")
     private Integer currentWarehouseId;
+
+    /**
+     * Audit field (DB-managed)
+     */
+    @Column(name = "created_at", insertable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    /* =====================
+       GETTERS
+       ===================== */
 
     public Integer getId() {
         return id;
@@ -40,9 +61,21 @@ public class Vehicle {
         return status;
     }
 
+    public Integer getHomeWarehouseId() {
+        return homeWarehouseId;
+    }
+
     public Integer getCurrentWarehouseId() {
         return currentWarehouseId;
     }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    /* =====================
+       SETTERS
+       ===================== */
 
     public void setPlateNumber(String plateNumber) {
         this.plateNumber = plateNumber;
@@ -54,6 +87,10 @@ public class Vehicle {
 
     public void setStatus(VehicleStatus status) {
         this.status = status;
+    }
+
+    public void setHomeWarehouseId(Integer homeWarehouseId) {
+        this.homeWarehouseId = homeWarehouseId;
     }
 
     public void setCurrentWarehouseId(Integer currentWarehouseId) {
