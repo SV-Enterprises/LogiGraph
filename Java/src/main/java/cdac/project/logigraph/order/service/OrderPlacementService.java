@@ -1,7 +1,7 @@
 package cdac.project.logigraph.order.service;
 
 import cdac.project.logigraph.inventory.service.InventoryService;
-import cdac.project.logigraph.order.dto.PlaceOrderRequest;
+import cdac.project.logigraph.order.dto.CreateOrderRequest;
 import cdac.project.logigraph.order.entity.Order;
 import cdac.project.logigraph.order.entity.OrderItem;
 import cdac.project.logigraph.order.entity.OrderStatusHistory;
@@ -52,7 +52,7 @@ public class OrderPlacementService {
     @Transactional
     public Order placeOrder(
             Integer customerId,
-            PlaceOrderRequest request
+            CreateOrderRequest request
     ) {
 
         // 1️⃣ Find warehouses that can fulfill ALL items
@@ -97,7 +97,7 @@ public class OrderPlacementService {
                 request.getItems()
         );
 
-        // 6️⃣ Save Order Status History (timestamp auto-set by entity)
+        // 6️⃣ Save Order Status History
         OrderStatusHistory history = new OrderStatusHistory();
         history.setOrderId(order.getId());
         history.setStatus(OrderStatus.PLACED);
@@ -118,6 +118,10 @@ public class OrderPlacementService {
     }
 
     private String generateTrackingId() {
-        return "LG-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
+        return "LG-" +
+                UUID.randomUUID()
+                        .toString()
+                        .substring(0, 10)
+                        .toUpperCase();
     }
 }
