@@ -4269,5 +4269,1078 @@ FOREIGN KEY (current_warehouse_id)
 REFERENCES warehouses(id)
 ON DELETE SET NULL
 ON UPDATE CASCADE;
+--------------------------------------------------------------------------------------------------------------------------
+Updated Codes
+
+Product
+---------------------------------------------------------------------------------------------------
+package cdac.project.logigraph.catalog.entity;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "products")
+public class Product {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(nullable = false, length = 100)
+    private String name;
+
+    @Column(nullable = false, unique = true, length = 50)
+    private String sku;
+
+    /**
+     * Money field – MUST be BigDecimal
+     */
+    @Column(name = "unit_price", precision = 10, scale = 2, nullable = false)
+    private BigDecimal unitPrice;
+
+    /**
+     * Audit field (DB-managed)
+     */
+    @Column(name = "created_at", updatable = false, insertable = false)
+    private LocalDateTime createdAt;
+
+    /* =========================
+       GETTERS
+       ========================= */
+
+    public Integer getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getSku() {
+        return sku;
+    }
+
+    public BigDecimal getUnitPrice() {
+        return unitPrice;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    /* =========================
+       SETTERS
+       ========================= */
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setSku(String sku) {
+        this.sku = sku;
+    }
+
+    public void setUnitPrice(BigDecimal unitPrice) {
+        this.unitPrice = unitPrice;
+    }
+}
+---------------------------------------------------------------------------------------------------
+WarehouseResponse
+
+package cdac.project.logigraph.inventory.dto;
+
+import cdac.project.logigraph.inventory.entity.Warehouse;
+
+public class WarehouseResponse {
+
+    private Integer id;
+    private String name;
+    private Double latitude;
+    private Double longitude;
+    private String address;
+    private Boolean active;
+
+    public static WarehouseResponse fromEntity(Warehouse warehouse) {
+
+        WarehouseResponse response = new WarehouseResponse();
+        response.id = warehouse.getId();
+        response.name = warehouse.getName();
+
+        response.latitude =
+                warehouse.getLatitude() != null
+                        ? warehouse.getLatitude().doubleValue()
+                        : null;
+
+        response.longitude =
+                warehouse.getLongitude() != null
+                        ? warehouse.getLongitude().doubleValue()
+                        : null;
+
+        response.address = warehouse.getAddress();
+        response.active = warehouse.getActive();
+
+        return response;
+    }
+
+    public Integer getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public Boolean getActive() {
+        return active;
+    }
+}
+
+-------------------------------------------------------------------------------------------------------
+Warehouse
+
+package cdac.project.logigraph.inventory.entity;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+
+@Entity
+@Table(name = "warehouses")
+public class Warehouse {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(nullable = false, length = 100)
+    private String name;
+
+    @Column(
+        nullable = false,
+        precision = 10,
+        scale = 8
+    )
+    private BigDecimal latitude;
+
+    @Column(
+        nullable = false,
+        precision = 11,
+        scale = 8
+    )
+    private BigDecimal longitude;
+
+    @Column(length = 255)
+    private String address;
+
+    /**
+     * Controls whether warehouse can be used
+     * for routing and order fulfillment.
+     */
+    @Column(nullable = false)
+    private Boolean active;
+
+    // ---------------- GETTERS ----------------
+
+    public Integer getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public BigDecimal getLatitude() {
+        return latitude;
+    }
+
+    public BigDecimal getLongitude() {
+        return longitude;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public Boolean getActive() {
+        return active;
+    }
+
+    // ---------------- SETTERS ----------------
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setLatitude(BigDecimal latitude) {
+        this.latitude = latitude;
+    }
+
+    public void setLongitude(BigDecimal longitude) {
+        this.longitude = longitude;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    public void setActive(Boolean active) {
+        this.active = active;
+    }
+}
+------------------------------------------------------------------------------------------------
+WarehouseService
+
+package cdac.project.logigraph.inventory.service;
+
+import cdac.project.logigraph.inventory.dto.CreateWarehouseRequest;
+import cdac.project.logigraph.inventory.dto.UpdateWarehouseRequest;
+import cdac.project.logigraph.inventory.entity.Warehouse;
+import cdac.project.logigraph.inventory.repository.WarehouseRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+@Service
+public class WarehouseService {
+
+    private final WarehouseRepository warehouseRepository;
+
+    public WarehouseService(WarehouseRepository warehouseRepository) {
+        this.warehouseRepository = warehouseRepository;
+    }
+
+    /* =========================
+       CREATE
+       ========================= */
+
+    @Transactional
+    public Warehouse createWarehouse(CreateWarehouseRequest request) {
+
+        Warehouse warehouse = new Warehouse();
+        warehouse.setName(request.getName());
+
+        warehouse.setLatitude(
+                BigDecimal.valueOf(request.getLatitude())
+        );
+        warehouse.setLongitude(
+                BigDecimal.valueOf(request.getLongitude())
+        );
+
+        warehouse.setAddress(request.getAddress());
+        warehouse.setActive(true);
+
+        return warehouseRepository.save(warehouse);
+    }
+
+    /* =========================
+       UPDATE
+       ========================= */
+
+    @Transactional
+    public Warehouse updateWarehouse(
+            Integer warehouseId,
+            UpdateWarehouseRequest request
+    ) {
+
+        Warehouse warehouse =
+                warehouseRepository.findById(warehouseId)
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "Warehouse not found: " + warehouseId
+                                )
+                        );
+
+        if (request.getName() != null) {
+            warehouse.setName(request.getName());
+        }
+
+        if (request.getLatitude() != null) {
+            warehouse.setLatitude(
+                    BigDecimal.valueOf(request.getLatitude())
+            );
+        }
+
+        if (request.getLongitude() != null) {
+            warehouse.setLongitude(
+                    BigDecimal.valueOf(request.getLongitude())
+            );
+        }
+
+        if (request.getAddress() != null) {
+            warehouse.setAddress(request.getAddress());
+        }
+
+        if (request.getActive() != null) {
+            warehouse.setActive(request.getActive());
+        }
+
+        return warehouseRepository.save(warehouse);
+    }
+
+    /* =========================
+       READ
+       ========================= */
+
+    @Transactional(readOnly = true)
+    public List<Warehouse> getAllWarehouses() {
+        return warehouseRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public Warehouse getWarehouse(Integer warehouseId) {
+        return warehouseRepository.findById(warehouseId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "Warehouse not found: " + warehouseId
+                        )
+                );
+    }
+}
+--------------------------------------------------------------------------------------------
+Order
+
+package cdac.project.logigraph.order.entity;
+
+import cdac.project.logigraph.order.enums.OrderStatus;
+import jakarta.persistence.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "orders")
+public class Order {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(name = "tracking_id", nullable = false, unique = true, length = 50)
+    private String trackingId;
+
+    @Column(name = "customer_id", nullable = false)
+    private Integer customerId;
+
+    @Column(name = "fulfillment_warehouse_id", nullable = false)
+    private Integer fulfillmentWarehouseId;
+
+    @Column(name = "assigned_vehicle_id")
+    private Integer assignedVehicleId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private OrderStatus status;
+
+    // ✅ MATCHES DECIMAL(10,8)
+    @Column(name = "dest_lat", precision = 10, scale = 8, nullable = false)
+    private BigDecimal destLat;
+
+    // ✅ MATCHES DECIMAL(11,8)
+    @Column(name = "dest_lng", precision = 11, scale = 8, nullable = false)
+    private BigDecimal destLng;
+
+    @Column(name = "created_at", updatable = false, insertable = false)
+    private LocalDateTime createdAt;
+
+    /* GETTERS */
+
+    public Integer getId() { return id; }
+    public String getTrackingId() { return trackingId; }
+    public Integer getCustomerId() { return customerId; }
+    public Integer getFulfillmentWarehouseId() { return fulfillmentWarehouseId; }
+    public Integer getAssignedVehicleId() { return assignedVehicleId; }
+    public OrderStatus getStatus() { return status; }
+    public BigDecimal getDestLat() { return destLat; }
+    public BigDecimal getDestLng() { return destLng; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+
+    /* SETTERS */
+
+    public void setTrackingId(String trackingId) { this.trackingId = trackingId; }
+    public void setCustomerId(Integer customerId) { this.customerId = customerId; }
+    public void setFulfillmentWarehouseId(Integer fulfillmentWarehouseId) { this.fulfillmentWarehouseId = fulfillmentWarehouseId; }
+    public void setAssignedVehicleId(Integer assignedVehicleId) { this.assignedVehicleId = assignedVehicleId; }
+    public void setStatus(OrderStatus status) { this.status = status; }
+    public void setDestLat(BigDecimal destLat) { this.destLat = destLat; }
+    public void setDestLng(BigDecimal destLng) { this.destLng = destLng; }
+}
+------------------------------------------------------------------------------------------------------------------------------------
+OrderPlacementService
+
+package cdac.project.logigraph.order.service;
+
+import cdac.project.logigraph.inventory.service.InventoryService;
+import cdac.project.logigraph.order.dto.CreateOrderRequest;
+import cdac.project.logigraph.order.entity.Order;
+import cdac.project.logigraph.order.entity.OrderItem;
+import cdac.project.logigraph.order.entity.OrderStatusHistory;
+import cdac.project.logigraph.order.enums.OrderStatus;
+import cdac.project.logigraph.order.repository.OrderItemRepository;
+import cdac.project.logigraph.order.repository.OrderRepository;
+import cdac.project.logigraph.order.repository.OrderStatusHistoryRepository;
+import cdac.project.logigraph.routing.service.RoutingService;
+import cdac.project.logigraph.vehicle.service.VehicleAssignmentService;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.math.BigDecimal;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+@Service
+public class OrderPlacementService {
+
+    private final InventoryService inventoryService;
+    private final RoutingService routingService;
+    private final VehicleAssignmentService vehicleAssignmentService;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final OrderStatusHistoryRepository statusHistoryRepository;
+
+    public OrderPlacementService(
+            InventoryService inventoryService,
+            RoutingService routingService,
+            VehicleAssignmentService vehicleAssignmentService,
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            OrderStatusHistoryRepository statusHistoryRepository
+    ) {
+        this.inventoryService = inventoryService;
+        this.routingService = routingService;
+        this.vehicleAssignmentService = vehicleAssignmentService;
+        this.orderRepository = orderRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+    }
+
+    /**
+     * FULL ORDER PLACEMENT ORCHESTRATION
+     *
+     * Guarantees:
+     * - Atomic DB operations
+     * - No partial inventory reservation
+     * - Vehicle assignment only AFTER successful commit
+     */
+    @Transactional
+    public Order placeOrder(
+            Integer customerId,
+            CreateOrderRequest request
+    ) {
+
+        /* =========================
+           1️⃣ DISCOVER ELIGIBLE WAREHOUSES
+           ========================= */
+
+        Set<Integer> eligibleWarehouses =
+                inventoryService.findWarehousesThatCanFulfillAllItems(
+                        request.getItems()
+                );
+
+        if (eligibleWarehouses.isEmpty()) {
+            throw new IllegalStateException(
+                    "No warehouse can fulfill all requested items"
+            );
+        }
+
+        /* =========================
+           2️⃣ SELECT BEST WAREHOUSE
+           ========================= */
+
+        Integer fulfillmentWarehouseId =
+                routingService.selectNearestWarehouse(
+                        eligibleWarehouses,
+                        request.getDestLat(),
+                        request.getDestLng()
+                );
+
+        /* =========================
+           3️⃣ CREATE ORDER (PLACED)
+           ========================= */
+
+        Order order = new Order();
+        order.setTrackingId(generateTrackingId());
+        order.setCustomerId(customerId);
+        order.setFulfillmentWarehouseId(fulfillmentWarehouseId);
+        order.setStatus(OrderStatus.PLACED);
+
+        // 🔒 Precision-safe geo storage
+        order.setDestLat(BigDecimal.valueOf(request.getDestLat()));
+        order.setDestLng(BigDecimal.valueOf(request.getDestLng()));
+
+        order = orderRepository.save(order);
+
+        /* =========================
+           4️⃣ CREATE ORDER ITEMS
+           ========================= */
+
+        for (Map.Entry<Integer, Integer> entry : request.getItems().entrySet()) {
+
+            OrderItem item = new OrderItem();
+            item.setOrderId(order.getId());
+            item.setProductId(entry.getKey());
+            item.setQuantity(entry.getValue());
+
+            orderItemRepository.save(item);
+        }
+
+        /* =========================
+           5️⃣ RESERVE INVENTORY
+           ========================= */
+
+        inventoryService.reserveInventory(
+                fulfillmentWarehouseId,
+                request.getItems()
+        );
+
+        /* =========================
+           6️⃣ RECORD STATUS HISTORY
+           ========================= */
+
+        OrderStatusHistory history = new OrderStatusHistory();
+        history.setOrderId(order.getId());
+        history.setStatus(OrderStatus.PLACED);
+
+        statusHistoryRepository.save(history);
+
+        /* =========================
+           7️⃣ ASYNC VEHICLE ASSIGNMENT
+           ========================= */
+
+        registerVehicleAssignmentAfterCommit(order.getId());
+
+        return order;
+    }
+
+    /* =========================
+       TRANSACTION HOOK
+       ========================= */
+
+    private void registerVehicleAssignmentAfterCommit(Integer orderId) {
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        vehicleAssignmentService.assignVehicle(orderId);
+                    }
+                }
+        );
+    }
+
+    /* =========================
+       UTIL
+       ========================= */
+
+    private String generateTrackingId() {
+        return "LG-" +
+                UUID.randomUUID()
+                        .toString()
+                        .substring(0, 10)
+                        .toUpperCase();
+    }
+}
+------------------------------------------------------------------------------------------------
+DijkstraEngine
+
+
+package cdac.project.logigraph.routing.algorithm;
+
+import cdac.project.logigraph.routing.graph.*;
+import org.springframework.stereotype.Component;
+
+import java.util.*;
+
+@Component
+public class DijkstraEngine {
+
+    public DijkstraResult shortestPaths(
+            Map<Integer, GraphNode> graph,
+            Integer source
+    ) {
+        Map<Integer, Long> dist = new HashMap<>();
+        Map<Integer, Integer> prev = new HashMap<>();
+
+        PriorityQueue<long[]> pq =
+                new PriorityQueue<>(Comparator.comparingLong(a -> a[1]));
+
+        pq.add(new long[]{source, 0});
+        dist.put(source, 0L);
+
+        while (!pq.isEmpty()) {
+            long[] cur = pq.poll();
+            int node = (int) cur[0];
+
+            for (GraphEdge edge : graph.get(node).getEdges()) {
+                long nd = dist.get(node) + edge.getWeight();
+
+                if (nd < dist.getOrDefault(
+                        edge.getTargetWarehouseId(),
+                        Long.MAX_VALUE
+                )) {
+                    dist.put(edge.getTargetWarehouseId(), nd);
+                    prev.put(edge.getTargetWarehouseId(), node);
+                    pq.add(new long[]{
+                            edge.getTargetWarehouseId(), nd
+                    });
+                }
+            }
+        }
+        return new DijkstraResult(dist, prev);
+    }
+}
+-----------------------------------------------------------------------------------------
+Route
+
+package cdac.project.logigraph.routing.entity;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+
+@Entity
+@Table(
+    name = "routes",
+    uniqueConstraints = @UniqueConstraint(
+        columnNames = {"source_warehouse_id", "destination_warehouse_id"}
+    )
+)
+public class Route {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(name = "source_warehouse_id", nullable = false)
+    private Integer sourceWarehouseId;
+
+    @Column(name = "destination_warehouse_id", nullable = false)
+    private Integer destinationWarehouseId;
+
+    @Column(
+        name = "distance_km",
+        nullable = false,
+        precision = 10,
+        scale = 2
+    )
+    private BigDecimal distanceKm;
+
+    @Column(name = "base_time_mins", nullable = false)
+    private int baseTimeMins;
+
+    @Column(name = "is_active", nullable = false)
+    private boolean active;
+
+    @Column(name = "is_bidirectional", nullable = false)
+    private boolean bidirectional;
+
+    /* =========================
+       GETTERS
+       ========================= */
+
+    public Integer getId() {
+        return id;
+    }
+
+    public Integer getSourceWarehouseId() {
+        return sourceWarehouseId;
+    }
+
+    public Integer getDestinationWarehouseId() {
+        return destinationWarehouseId;
+    }
+
+    public BigDecimal getDistanceKm() {
+        return distanceKm;
+    }
+
+    public int getBaseTimeMins() {
+        return baseTimeMins;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public boolean isBidirectional() {
+        return bidirectional;
+    }
+
+    /* =========================
+       SETTERS
+       ========================= */
+
+    public void setSourceWarehouseId(Integer sourceWarehouseId) {
+        this.sourceWarehouseId = sourceWarehouseId;
+    }
+
+    public void setDestinationWarehouseId(Integer destinationWarehouseId) {
+        this.destinationWarehouseId = destinationWarehouseId;
+    }
+
+    public void setDistanceKm(BigDecimal distanceKm) {
+        this.distanceKm = distanceKm;
+    }
+
+    public void setBaseTimeMins(int baseTimeMins) {
+        this.baseTimeMins = baseTimeMins;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
+    public void setBidirectional(boolean bidirectional) {
+        this.bidirectional = bidirectional;
+    }
+}
+--------------------------------------------------------------------------------------
+RoutingService
+
+package cdac.project.logigraph.routing.service;
+
+import cdac.project.logigraph.routing.algorithm.DijkstraEngine;
+import cdac.project.logigraph.routing.algorithm.DijkstraResult;
+import cdac.project.logigraph.routing.graph.GraphBuilder;
+import cdac.project.logigraph.routing.graph.GraphNode;
+import cdac.project.logigraph.inventory.entity.Warehouse;
+import cdac.project.logigraph.inventory.repository.WarehouseRepository;
+import org.springframework.stereotype.Service;
+
+import java.util.Map;
+import java.util.Set;
+
+@Service
+public class RoutingService {
+
+    private final GraphBuilder graphBuilder;
+    private final DijkstraEngine dijkstraEngine;
+    private final WarehouseRepository warehouseRepository;
+
+    public RoutingService(
+            GraphBuilder graphBuilder,
+            DijkstraEngine dijkstraEngine,
+            WarehouseRepository warehouseRepository
+    ) {
+        this.graphBuilder = graphBuilder;
+        this.dijkstraEngine = dijkstraEngine;
+        this.warehouseRepository = warehouseRepository;
+    }
+
+    public Integer selectNearestWarehouse(
+            Set<Integer> eligibleWarehouses,
+            double destLat,
+            double destLng
+    ) {
+
+        Map<Integer, GraphNode> graph = graphBuilder.buildGraph();
+
+        long bestTotalMinutes = Long.MAX_VALUE;
+        Integer bestWarehouseId = null;
+
+        for (Integer warehouseId : eligibleWarehouses) {
+
+            if (!graph.containsKey(warehouseId)) {
+                continue;
+            }
+
+            // 1️⃣ Middle-mile cost using Dijkstra
+            DijkstraResult result =
+                    dijkstraEngine.shortestPaths(graph, warehouseId);
+
+            long middleMileMinutes =
+                    result.getDistances().getOrDefault(
+                            warehouseId, Long.MAX_VALUE
+                    );
+
+            // 2️⃣ Last-mile cost (warehouse → customer)
+            Warehouse warehouse =
+                    warehouseRepository.findById(warehouseId)
+                            .orElseThrow(() ->
+                                    new IllegalStateException(
+                                            "Warehouse not found: " + warehouseId
+                                    )
+                            );
+
+            double km = haversine(
+                    warehouse.getLatitude().doubleValue(),
+                    warehouse.getLongitude().doubleValue(),
+                    destLat,
+                    destLng
+            );
+
+
+            long lastMileMinutes =
+                    Math.round((km / 40.0) * 60); // avg 40 km/h
+
+            // 3️⃣ Total cost
+            long totalMinutes =
+                    middleMileMinutes + lastMileMinutes;
+
+            if (totalMinutes < bestTotalMinutes) {
+                bestTotalMinutes = totalMinutes;
+                bestWarehouseId = warehouseId;
+            }
+        }
+
+        if (bestWarehouseId == null) {
+            throw new IllegalStateException(
+                    "Unable to determine nearest warehouse"
+            );
+        }
+
+        return bestWarehouseId;
+    }
+
+    private double haversine(
+            double lat1, double lon1,
+            double lat2, double lon2
+    ) {
+        final int EARTH_RADIUS_KM = 6371;
+
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+
+        double a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                        + Math.cos(Math.toRadians(lat1))
+                        * Math.cos(Math.toRadians(lat2))
+                        * Math.sin(dLon / 2)
+                        * Math.sin(dLon / 2);
+
+        return EARTH_RADIUS_KM * 2 *
+                Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+}
+----------------------------------------------------------------------------------
+VehicleRepository
+
+package cdac.project.logigraph.vehicle.repository;
+
+import cdac.project.logigraph.vehicle.entity.Vehicle;
+import cdac.project.logigraph.vehicle.enums.VehicleStatus;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
+
+    /* =====================================================
+       BASIC READ OPERATIONS
+       ===================================================== */
+
+    List<Vehicle> findByStatus(VehicleStatus status);
+
+    List<Vehicle> findByStatusIn(List<VehicleStatus> statuses);
+
+    boolean existsByPlateNumber(String plateNumber);
+
+    /* =====================================================
+       DASHBOARD SUPPORT
+       ===================================================== */
+
+    /**
+     * Required by DashboardService → fleet overview
+     */
+    long countByStatus(VehicleStatus status);
+
+    /* =====================================================
+       VEHICLE ASSIGNMENT (CONCURRENCY SAFE)
+       ===================================================== */
+
+    /**
+     * Fetch ONE IDLE vehicle with DB-level lock.
+     * Used when warehouse is NOT relevant (admin/manual ops).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT v
+        FROM Vehicle v
+        WHERE v.status = cdac.project.logigraph.vehicle.enums.VehicleStatus.IDLE
+        ORDER BY v.id
+    """)
+    Optional<Vehicle> findFirstIdleVehicleForUpdate();
+
+    /**
+     * Fetch ONE IDLE vehicle from a SPECIFIC warehouse.
+     * THIS IS THE METHOD USED DURING ORDER PLACEMENT.
+     *
+     * Guarantees:
+     * - No double assignment
+     * - Correct warehouse routing
+     * - Safe under concurrency
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT v
+        FROM Vehicle v
+        WHERE v.status = cdac.project.logigraph.vehicle.enums.VehicleStatus.IDLE
+          AND v.currentWarehouseId = :warehouseId
+        ORDER BY v.id
+    """)
+    Optional<Vehicle> findFirstIdleVehicleForWarehouseForUpdate(
+            Integer warehouseId
+    );
+}
+---------------------------------------------------------------------------------------
+VehicleAssignmentService
+
+package cdac.project.logigraph.vehicle.service;
+
+import cdac.project.logigraph.order.entity.Order;
+import cdac.project.logigraph.order.entity.OrderStatusHistory;
+import cdac.project.logigraph.order.enums.OrderStatus;
+import cdac.project.logigraph.order.repository.OrderRepository;
+import cdac.project.logigraph.order.repository.OrderStatusHistoryRepository;
+import cdac.project.logigraph.vehicle.entity.Vehicle;
+import cdac.project.logigraph.vehicle.enums.VehicleStatus;
+import cdac.project.logigraph.vehicle.repository.VehicleRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
+
+@Service
+public class VehicleAssignmentService {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(VehicleAssignmentService.class);
+
+    private final VehicleRepository vehicleRepository;
+    private final OrderRepository orderRepository;
+    private final OrderStatusHistoryRepository statusHistoryRepository;
+
+    public VehicleAssignmentService(
+            VehicleRepository vehicleRepository,
+            OrderRepository orderRepository,
+            OrderStatusHistoryRepository statusHistoryRepository
+    ) {
+        this.vehicleRepository = vehicleRepository;
+        this.orderRepository = orderRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+    }
+
+    /**
+     * Assigns an idle vehicle to an order.
+     * Idempotent, transactional, and concurrency-safe.
+     */
+    @Transactional
+    public void assignVehicle(Integer orderId) {
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() ->
+                        new IllegalStateException("Order not found: " + orderId)
+                );
+
+        // ❗ Guard terminal states
+        if (order.getStatus() == OrderStatus.CANCELLED
+                || order.getStatus() == OrderStatus.DELIVERED) {
+            log.warn("Skipping vehicle assignment for terminal order {}",
+                    orderId);
+            return;
+        }
+
+        // ❗ Idempotency
+        if (order.getAssignedVehicleId() != null) {
+            log.info("Order {} already has assigned vehicle {}",
+                    orderId, order.getAssignedVehicleId());
+            return;
+        }
+
+        // ❗ Warehouse-aware vehicle selection
+        Optional<Vehicle> vehicleOpt =
+                vehicleRepository.findFirstIdleVehicleForWarehouseForUpdate(
+                        order.getFulfillmentWarehouseId()
+                );
+
+        if (vehicleOpt.isEmpty()) {
+            log.warn("No idle vehicle available for warehouse {} (order {})",
+                    order.getFulfillmentWarehouseId(), orderId);
+            return;
+        }
+
+        Vehicle vehicle = vehicleOpt.get();
+
+        // Update vehicle
+        vehicle.setStatus(VehicleStatus.ASSIGNED);
+        vehicleRepository.save(vehicle);
+
+        // Update order
+        order.setAssignedVehicleId(vehicle.getId());
+        order.setStatus(OrderStatus.ASSIGNED);
+        orderRepository.save(order);
+
+        // Audit trail
+        OrderStatusHistory history = new OrderStatusHistory();
+        history.setOrderId(orderId);
+        history.setStatus(OrderStatus.ASSIGNED);
+        statusHistoryRepository.save(history);
+
+        log.info("Vehicle {} assigned to order {}",
+                vehicle.getId(), orderId);
+    }
+}
+-----------------------------------------------------------------------------------------
+application.properties
+
+
+
+spring.application.name=sv.logigraph.v1
+
+# =========================
+# DATABASE CONFIG (MySQL)
+# =========================
+spring.datasource.url=jdbc:mysql://localhost:3306/logigraph_db
+spring.datasource.username=root
+spring.datasource.password=root
+
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# =========================
+# JPA / HIBERNATE
+# =========================
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect
+
+# =========================
+# JWT CONFIG
+# =========================
+jwt.secret=logigraph_dev_secret_key_please_change
+jwt.expiration-ms=86400000
+
+
+server.port=8081
+
+------------------------------------------------------------------------------------------------
+
+
+
+
 
 
